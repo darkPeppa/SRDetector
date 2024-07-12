@@ -1,0 +1,7 @@
+/control/verbose 1
+/run/verbose 1
+/event/verbose 1
+/tracking/verbose 1
+/gun/particle gamma
+/gun/energy 0.5 MeV
+/run/beamOn 100
