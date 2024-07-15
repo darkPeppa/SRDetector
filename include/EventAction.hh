@@ -7,8 +7,6 @@ public:
     EventAction() = default;
     ~EventAction() override = default;
 
-    void  BeginOfEventAction(const G4Event*) override;
-    void    EndOfEventAction(const G4Event*) override;
+    void BeginOfEventAction(const G4Event *) override;
+    void EndOfEventAction(const G4Event *) override;
 };
-
-    
