@@ -1,0 +1,5 @@
+D:/detector/SRDetector/build/CMakeFiles/srdet.dir
+D:/detector/SRDetector/build/CMakeFiles/SD.dir
+D:/detector/SRDetector/build/CMakeFiles/INSTALL.dir
+D:/detector/SRDetector/build/CMakeFiles/ALL_BUILD.dir
+D:/detector/SRDetector/build/CMakeFiles/ZERO_CHECK.dir

@@ -9,6 +9,13 @@
 #include "G4VisExecutive.hh"
 #include "G4UIExecutive.hh"
 #include "G4StepLimiterPhysics.hh"
+#include "G4Scintillation.hh"
+#include "G4OpticalPhoton.hh"
+#include "G4Scintillation.hh"
+#include "G4OpAbsorption.hh"
+#include "G4OpRayleigh.hh"
+#include "G4OpBoundaryProcess.hh"
+#include "G4OpticalPhysics.hh"
 
 int main(int argc, char** argv)
 {
@@ -18,6 +25,17 @@ int main(int argc, char** argv)
     runManager->SetUserInitialization(new DetectorConstruction());
     auto physicsList = new FTFP_BERT;
     physicsList->RegisterPhysics(new G4StepLimiterPhysics());
+    G4Scintillation* scintProcess = new G4Scintillation();
+    
+    scintProcess->SetTrackSecondariesFirst(true);
+    
+    
+    G4OpAbsorption* absorption = new G4OpAbsorption();
+    G4OpRayleigh* rayleigh = new G4OpRayleigh();
+    G4OpBoundaryProcess* boundary = new G4OpBoundaryProcess();
+    
+    G4OpticalPhysics* opticalPhysics = new G4OpticalPhysics();
+    physicsList-> RegisterPhysics(opticalPhysics);
     runManager->SetUserInitialization(physicsList);
     runManager->SetUserInitialization(new ActionInitialization());
     runManager->Initialize();

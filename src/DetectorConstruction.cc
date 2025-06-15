@@ -15,6 +15,9 @@
 #include "G4Orb.hh"
 #include "G4Sphere.hh"
 #include "G4Trd.hh"
+#include "G4OpticalSurface.hh"
+#include "G4LogicalSkinSurface.hh"
+
 
 DetectorConstruction::DetectorConstruction()
     : G4VUserDetectorConstruction()
@@ -25,7 +28,7 @@ DetectorConstruction::~DetectorConstruction()
 {
 }
 
-G4VPhysicalVolume *DetectorConstruction::Construct()
+/*G4VPhysicalVolume *DetectorConstruction::Construct()
 {
     G4bool checkOverlaps = true;
 
@@ -217,7 +220,154 @@ G4VPhysicalVolume *DetectorConstruction::Construct()
     logicEnv->SetUserLimits(fStepLimit);
 
     return physWorld;
-}
+}*/
+
+
+G4VPhysicalVolume* DetectorConstruction::Construct() {
+    
+        G4NistManager* nist = G4NistManager::Instance();
+        G4Material* world_mat = nist->FindOrBuildMaterial("G4_AIR");
+        G4Material* envelope_mat = nist->FindOrBuildMaterial("G4_AIR");
+        
+        
+        G4Material* shell_mat = nist->FindOrBuildMaterial("G4_Al");
+        G4Material* core_mat = nist->FindOrBuildMaterial("G4_CESIUM_IODIDE");
+
+
+G4MaterialPropertiesTable* csiMPT = new G4MaterialPropertiesTable();
+
+const G4int NUM = 2;
+G4double pp[NUM] = {2.48*eV, 3.1*eV};
+G4double scintil[NUM] = {1.0, 1.0};  
+csiMPT->AddProperty("SCINTILLATIONCOMPONENT1", pp, scintil, NUM);
+
+csiMPT->AddConstProperty("SCINTILLATIONTIMECONSTANT1", 1.0*ns); 
+csiMPT->AddConstProperty("SCINTILLATIONYIELD", 50000/MeV);     
+
+G4double rindex[NUM] = {1.78, 1.78}; 
+csiMPT->AddProperty("RINDEX", pp, rindex, NUM);
+
+G4double absorption[NUM] = {5.0*m, 5.0*m};
+csiMPT->AddProperty("ABSLENGTH", pp, absorption, NUM);
+
+core_mat->SetMaterialPropertiesTable(csiMPT);
+
+
+G4OpticalSurface* opSurface = new G4OpticalSurface("MicrochannelSurface");
+opSurface->SetType(dielectric_dielectric);
+opSurface->SetFinish(polished);
+opSurface->SetModel(unified);
+
+
+G4MaterialPropertiesTable* alMPT = new G4MaterialPropertiesTable();
+const G4int num = 5;
+
+G4double ePhoton[num] = {1.0*eV, 2.26*eV, 3.54*eV, 4.96*eV, 6.20*eV}; 
+G4double reflectivity[num] = {0.92, 0.90, 0.88, 0.85, 0.82}; 
+
+alMPT->AddProperty("REFLECTIVITY", ePhoton, reflectivity, num);
+shell_mat->SetMaterialPropertiesTable(alMPT);
+
+
+G4OpticalSurface* alSurface = new G4OpticalSurface("AlSurface");
+alSurface->SetType(dielectric_metal); 
+alSurface->SetFinish(polished);       
+alSurface->SetModel(unified);         
+
+
+G4MaterialPropertiesTable* surfaceMPT = new G4MaterialPropertiesTable();
+surfaceMPT->AddProperty("REFLECTIVITY", ePhoton, reflectivity, num);
+G4double absorption2[num] = {0.1*um, 0.1*um, 0.1*um, 0.1*um, 0.1*um};
+surfaceMPT->AddProperty("ABSORPTION", ePhoton, absorption2, num, true);
+surfaceMPT->AddConstProperty("SPECULARLOBECONSTANT", 0.3);
+surfaceMPT->AddConstProperty("SPECULARSPIKECONSTANT", 0.2);
+surfaceMPT->AddConstProperty("BACKSCATTERCONSTANT", 0.1);
+
+
+alSurface->SetMaterialPropertiesTable(surfaceMPT);
+
+
+
+
+
+
+        
+        G4Element *si = nist->FindOrBuildElement("Si");
+    G4Element *pb = nist->FindOrBuildElement("Pb");
+    G4Element *k = nist->FindOrBuildElement("K");
+    G4Element *na = nist->FindOrBuildElement("Na");
+    G4Element *o = nist->FindOrBuildElement("O");
+    G4Element *al = nist->FindOrBuildElement("Al");
+    G4Material *tube_mat = new G4Material("fred", 2.29 * g / cm3, 6);
+    tube_mat->AddElement(si, 0.55 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+    tube_mat->AddElement(pb, 0.3 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+    tube_mat->AddElement(k, 0.092 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+    tube_mat->AddElement(na, 0.038 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+    tube_mat->AddElement(al, 0.04 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+    tube_mat->AddElement(o, 1.59 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+
+
+
+
+
+        G4Box* solidWorld = new G4Box("World", 6*cm, 6*cm, 6*cm);
+        G4LogicalVolume* logicWorld = new G4LogicalVolume(solidWorld, world_mat, "World");
+        G4PVPlacement* physWorld = new G4PVPlacement(0, G4ThreeVector(), logicWorld, "World", 0, false, 0);
+
+        
+        G4Box* solidEnvelope = new G4Box("Envelope", 5*cm, 5*cm, 5*cm);
+        G4LogicalVolume* logicEnvelope = new G4LogicalVolume(solidEnvelope, envelope_mat, "Envelope");
+        new G4PVPlacement(0, G4ThreeVector(), logicEnvelope, "Envelope", logicWorld, false, 0);
+
+        
+        G4double tube_radius = 1.1*cm;
+        G4double tube_height = 3*cm;
+        G4Tubs* solidTube = new G4Tubs("MainTube", 0, tube_radius, tube_height/2, 0, 360*deg);
+        G4LogicalVolume* logicTube = new G4LogicalVolume(solidTube, tube_mat, "MainTube");
+        G4PVPlacement* physTube = new G4PVPlacement(0, G4ThreeVector(0,0,0), logicTube, "MainTube", logicEnvelope, false, 0);
+
+        G4double outer_radius = 0.012*cm; 
+        G4double inner_radius = 0.01*cm;  
+        G4double spacing = 2*outer_radius;
+
+        
+        std::vector<G4ThreeVector> positions;
+        positions.push_back(G4ThreeVector(0,0,0));
+
+        int rings = static_cast<int>((tube_radius - outer_radius)/spacing) + 1;
+        for (int ring = 1; ring <= rings; ++ring) {
+            int channels_in_ring = 6*ring;
+            for (int i = 0; i < channels_in_ring; ++i) {
+                G4double angle = 2*3.14 * i/channels_in_ring;
+                G4double distance = ring*spacing;
+                G4double x = distance * std::cos(angle);
+                G4double y = distance * std::sin(angle);
+                positions.push_back(G4ThreeVector(x,y,0));
+            }
+        }
+
+     
+        G4Tubs* solidShell = new G4Tubs("MicroShell", 0, outer_radius, tube_height/2, 0, 360*deg);
+        
+        G4Tubs* solidCore = new G4Tubs("MicroCore", 0, inner_radius, tube_height/2, 0, 360*deg);
+
+        G4LogicalVolume* logicShell = new G4LogicalVolume(solidShell, shell_mat, "MicroShell");
+        G4LogicalVolume* logicCore = new G4LogicalVolume(solidCore, core_mat, "MicroCore");
+        new G4LogicalSkinSurface("AlSurface", logicShell, alSurface);
+       
+        for (size_t i = 0; i < positions.size(); ++i) {
+           
+            if (positions[i].perp() + outer_radius <= tube_radius) {
+                new G4PVPlacement(0, positions[i], logicShell, "MicroShell", logicTube, false, i);
+                new G4PVPlacement(0, G4ThreeVector(0,0,0), logicCore, "MicroCore", logicShell, false, i);
+            }
+        }
+
+        return physWorld;
+    
+};
+
+
 
 void DetectorConstruction::SetMaxStep(G4double maxStep)
 {
@@ -225,7 +375,7 @@ void DetectorConstruction::SetMaxStep(G4double maxStep)
         fStepLimit->SetMaxAllowedStep(maxStep);
 }
 
-void DetectorConstruction::ConstructSD()
+/*void DetectorConstruction::ConstructSD()
 {
     G4double dtubemin = 0.8 * cm;
     G4double dtubemax = 1.1 * cm;
@@ -251,4 +401,15 @@ void DetectorConstruction::ConstructSD()
         }
         j++;
     }
+}*/
+
+void DetectorConstruction::ConstructSD() {
+   
+    G4SDManager* sdManager = G4SDManager::GetSDMpointer();
+
+
+       SDet* microchannelSD = new SDet("/MicrochannelSD", "HitsCollection");
+        sdManager->AddNewDetector(microchannelSD);
+    
+    SetSensitiveDetector("MicroCore", microchannelSD, true);
 }

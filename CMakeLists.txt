@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0)
 project(B1)
 option(WITH_GEANT4_UIVIS "Build example with Geant4 UI and Vis drivers" ON)
 if(WITH_GEANT4_UIVIS)
@@ -34,7 +34,8 @@ foreach(_script ${EXAMPLEB1_SCRIPTS})
     )
 endforeach()
 
-#add_custom_target(SD DEPENDS srdet)
+add_custom_target(SD DEPENDS srdet)
+
 
 install(TARGETS srdet DESTINATION bin)
 
