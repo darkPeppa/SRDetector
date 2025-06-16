@@ -249,6 +249,7 @@ csiMPT->AddProperty("RINDEX", pp, rindex, NUM);
 
 G4double absorption[NUM] = {5.0*m, 5.0*m};
 csiMPT->AddProperty("ABSLENGTH", pp, absorption, NUM);
+csiMPT->AddConstProperty("RESOLUTIONSCALE", 0.04);
 
 core_mat->SetMaterialPropertiesTable(csiMPT);
 
@@ -279,9 +280,9 @@ G4MaterialPropertiesTable* surfaceMPT = new G4MaterialPropertiesTable();
 surfaceMPT->AddProperty("REFLECTIVITY", ePhoton, reflectivity, num);
 G4double absorption2[num] = {0.1*um, 0.1*um, 0.1*um, 0.1*um, 0.1*um};
 surfaceMPT->AddProperty("ABSORPTION", ePhoton, absorption2, num, true);
-surfaceMPT->AddConstProperty("SPECULARLOBECONSTANT", 0.3);
-surfaceMPT->AddConstProperty("SPECULARSPIKECONSTANT", 0.2);
-surfaceMPT->AddConstProperty("BACKSCATTERCONSTANT", 0.1);
+surfaceMPT->AddConstProperty("SPECULARLOBECONSTANT", 0.3, true);
+surfaceMPT->AddConstProperty("SPECULARSPIKECONSTANT", 0.2, true);
+surfaceMPT->AddConstProperty("BACKSCATTERCONSTANT", 0.1, true);
 
 
 alSurface->SetMaterialPropertiesTable(surfaceMPT);

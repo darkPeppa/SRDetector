@@ -16,6 +16,9 @@
 #include "G4OpRayleigh.hh"
 #include "G4OpBoundaryProcess.hh"
 #include "G4OpticalPhysics.hh"
+#include "G4AnalysisManager.hh"
+
+
 
 int main(int argc, char** argv)
 {
@@ -33,10 +36,17 @@ int main(int argc, char** argv)
     G4OpAbsorption* absorption = new G4OpAbsorption();
     G4OpRayleigh* rayleigh = new G4OpRayleigh();
     G4OpBoundaryProcess* boundary = new G4OpBoundaryProcess();
-    
     G4OpticalPhysics* opticalPhysics = new G4OpticalPhysics();
-    physicsList-> RegisterPhysics(opticalPhysics);
+    
+  auto opticalParams = G4OpticalParameters::Instance();
+    opticalParams->SetBoundaryVerboseLevel(3);
+    opticalPhysics->SetVerboseLevel(1);
+    G4AnalysisManager::Instance()->SetVerboseLevel(1);
+    
+  physicsList-> RegisterPhysics(opticalPhysics);
     runManager->SetUserInitialization(physicsList);
+    
+    
     runManager->SetUserInitialization(new ActionInitialization());
     runManager->Initialize();
     G4VisManager* visManager = new G4VisExecutive;

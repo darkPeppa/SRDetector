@@ -4,4 +4,4 @@
 /tracking/verbose 1
 /gun/particle gamma
 /gun/energy 0.5 MeV
-/run/beamOn 100
+/run/beamOn 3

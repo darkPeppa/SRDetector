@@ -3,8 +3,9 @@
 #include "G4ThreeVector.hh"
 #include "G4SDManager.hh"
 #include "G4ios.hh"
-
+#include "G4VProcess.hh" 
 #include "SensitiveDetector.hh"
+#include "G4AnalysisManager.hh"
 
 SDet::SDet(const G4String &name,
            const G4String &hitsCollectionName) : G4VSensitiveDetector(name)
@@ -31,11 +32,24 @@ G4bool SDet::ProcessHits(G4Step *aStep, G4TouchableHistory *)
     newHit->SetEdep(edep);
     newHit->SetPos(aStep->GetPostStepPoint()->GetPosition());
     fHitsCollection->insert(newHit);
+    auto analysisManager = G4AnalysisManager::Instance();
+        //analysisManager->FillNtupleIColumn(0,aStep->GetTrack()->GetTrackID());
+        analysisManager->FillNtupleIColumn(1,aStep->GetTrack()->GetTrackID());
+        analysisManager->FillNtupleSColumn(2,aStep->GetTrack()->GetParticleDefinition()->GetParticleName());
+        analysisManager->FillNtupleDColumn(3,edep);
+        analysisManager->FillNtupleDColumn(4,aStep->GetPostStepPoint()->GetPosition().getX());
+        analysisManager->FillNtupleDColumn(5,aStep->GetPostStepPoint()->GetPosition().getY());
+        analysisManager->FillNtupleDColumn(6,aStep->GetPostStepPoint()->GetPosition().getZ());
+        analysisManager->FillNtupleSColumn(7,aStep->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName());
+        
+        analysisManager->AddNtupleRow();
+        analysisManager->Write();
     return true;
 }
 
 void SDet::EndOfEvent(G4HCofThisEvent *)
 {
+    
     if (verboseLevel > 1)
     {
         std::size_t nofHits = fHitsCollection->entries();

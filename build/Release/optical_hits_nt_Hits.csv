@@ -1,0 +1,12 @@
+#class tools::wcsv::ntuple
+#title hits data
+#separator 44
+#vector_separator 59
+#column int EventID
+#column int TrackID
+#column double Partical
+#column double Energy
+#column double PosX_mm
+#column double PosY_mm
+#column double PosZ_mm
+#column string Process
