@@ -9,6 +9,7 @@
 #include "G4StepLimiterPhysics.hh"
 #include "SensitiveDetector.hh"
 #include "G4AnalysisManager.hh"
+#include "G4VHitsCollection.hh"
 
 void EventAction::BeginOfEventAction(const G4Event *)
 {
@@ -18,13 +19,17 @@ void EventAction::BeginOfEventAction(const G4Event *)
 
 void EventAction::EndOfEventAction(const G4Event *event)
 {//auto analysisManager = G4AnalysisManager::Instance();
+    std::ofstream outputFile;
     G4TrajectoryContainer *trajectoryContainer = event->GetTrajectoryContainer();
     std::size_t n_trajectories = 0;
     if (trajectoryContainer)
         n_trajectories = trajectoryContainer->entries();
     std::cout << n_trajectories << G4endl;
     G4int eventID = event->GetEventID();
+    outputFile.open("hits_immediate.csv", std::ios::app);
+    outputFile<<eventID<<G4endl;
     //analysisManager->FillNtupleIColumn(0,eventID);
+    //analysisManager->AddNtupleRow();
     if (eventID < 100 || eventID % 100 == 0)
     {
         G4cout << ">>> Event: " << eventID << G4endl;
@@ -36,17 +41,5 @@ void EventAction::EndOfEventAction(const G4Event *event)
             G4cout << n << G4endl;
         }
 
-
-        /*G4VHitsCollection* hc = event->GetHCofThisEvent()->GetHC(0);
-        if (hc) {
-            G4cout << "    "
-           << hc->GetName() << " hits stored in this event" << G4endl;
-        }*/
-
-        // std::cout << hc << G4endl;
-        // if (hc) {
-        // G4cout << "    "
-        //  << hc << " hits stored in this event" << G4endl;
-        // }
     }
 }

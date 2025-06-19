@@ -2,14 +2,14 @@
 #include "G4Run.hh"
 #include "G4RunManager.hh"
 #include "G4AnalysisManager.hh"
-
+std::ofstream outputFile;
 RunAction::RunAction()
 {
 	G4RunManager::GetRunManager()->SetPrintProgress(1000);
 	auto analysisManager = G4AnalysisManager::Instance();
+    outputFile.open("hits_immediate.csv", std::ios::app);
     
-    
-    analysisManager->SetFileName("optical_hits.txt");
+    analysisManager->SetFileName("optical_hits.csv");
    analysisManager->SetNtupleMerging(true);
     
    
@@ -24,6 +24,13 @@ RunAction::RunAction()
     analysisManager->CreateNtupleDColumn("PosZ_mm");
     analysisManager->CreateNtupleSColumn("Process"); 
     analysisManager->FinishNtuple();
+
+	outputFile << "{"
+           << "\"event\":" <<"," << "\"track\":" <<"," << "\"particle\":" <<"," << "\"energy\":" <<","
+           << "\"x\":"  << ","
+           << "\"y\":"  << ","
+           << "\"z\":" << "\"process\":" <<","
+           << "}\n";
 }
 void RunAction::BeginOfRunAction(const G4Run *)
 {

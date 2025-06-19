@@ -21,11 +21,12 @@ void SDet::Initialize(G4HCofThisEvent *hce)
     hce->AddHitsCollection(hcID, fHitsCollection);
 }
 
-G4bool SDet::ProcessHits(G4Step *aStep, G4TouchableHistory *)
+G4bool SDet::ProcessHits(G4Step *aStep, G4TouchableHistory * history)
 {
+    std::ofstream outputFile;
+    outputFile.open("hits_immediate.csv", std::ios::app);
     G4double edep = aStep->GetTotalEnergyDeposit();
-    if (edep == 0.)
-        return false;
+    
     auto newHit = new SDHits();
     newHit->SetTrackID(aStep->GetTrack()->GetTrackID());
     newHit->SetElementNb(aStep->GetPreStepPoint()->GetTouchableHandle()->GetCopyNumber());
@@ -34,16 +35,20 @@ G4bool SDet::ProcessHits(G4Step *aStep, G4TouchableHistory *)
     fHitsCollection->insert(newHit);
     auto analysisManager = G4AnalysisManager::Instance();
         //analysisManager->FillNtupleIColumn(0,aStep->GetTrack()->GetTrackID());
-        analysisManager->FillNtupleIColumn(1,aStep->GetTrack()->GetTrackID());
-        analysisManager->FillNtupleSColumn(2,aStep->GetTrack()->GetParticleDefinition()->GetParticleName());
+        //analysisManager->FillNtupleIColumn(1,aStep->GetTrack()->GetTrackID());
+       // analysisManager->FillNtupleSColumn(2,aStep->GetTrack()->GetParticleDefinition()->GetParticleName());
         analysisManager->FillNtupleDColumn(3,edep);
-        analysisManager->FillNtupleDColumn(4,aStep->GetPostStepPoint()->GetPosition().getX());
-        analysisManager->FillNtupleDColumn(5,aStep->GetPostStepPoint()->GetPosition().getY());
-        analysisManager->FillNtupleDColumn(6,aStep->GetPostStepPoint()->GetPosition().getZ());
-        analysisManager->FillNtupleSColumn(7,aStep->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName());
-        
+       // analysisManager->FillNtupleDColumn(4,aStep->GetPostStepPoint()->GetPosition().getX());
+       // analysisManager->FillNtupleDColumn(5,aStep->GetPostStepPoint()->GetPosition().getY());
+       // analysisManager->FillNtupleDColumn(6,aStep->GetPostStepPoint()->GetPosition().getZ());
+       // analysisManager->FillNtupleSColumn(7,aStep->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName());
         analysisManager->AddNtupleRow();
         analysisManager->Write();
+        outputFile<<aStep->GetTrack()->GetTrackID() <<"," <<aStep->GetTrack()->GetParticleDefinition()->GetParticleName() <<"," << edep <<","
+           << aStep->GetPostStepPoint()->GetPosition().getX()  << ","
+           << aStep->GetPostStepPoint()->GetPosition().getY() << ","
+           << aStep->GetPostStepPoint()->GetPosition().getZ() << aStep->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName() <<","
+           << "}\n";
     return true;
 }
 

@@ -366,7 +366,7 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
 
         return physWorld;
     
-};
+}
 
 
 
@@ -412,5 +412,5 @@ void DetectorConstruction::ConstructSD() {
        SDet* microchannelSD = new SDet("/MicrochannelSD", "HitsCollection");
         sdManager->AddNewDetector(microchannelSD);
     
-    SetSensitiveDetector("MicroCore", microchannelSD, true);
+    SetSensitiveDetector("MicroCore", microchannelSD);
 }
