@@ -1,0 +1,3 @@
+/gun/particle gamma
+/gun/energy 6 MeV
+/run/beamOn 1000

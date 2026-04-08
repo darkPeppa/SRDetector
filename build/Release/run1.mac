@@ -1,0 +1,11 @@
+/control/verbose 1
+/run/verbose 1
+/event/verbose 1
+/tracking/verbose 2
+/gun/particle gamma
+/gun/energy 0.5 MeV
+/process/optical/verbose 1
+/process/setVerbose 1 OpBoundary
+/process/setVerbose 1 OpAbsorption
+/process/setVerbose 1 OpRayleigh
+/run/beamOn 10

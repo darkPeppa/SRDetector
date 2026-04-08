@@ -1,46 +1,119 @@
 #include "EventAction.hh"
 #include "G4Event.hh"
-#include "G4EventManager.hh"
-#include "G4TrajectoryContainer.hh"
-#include "G4Trajectory.hh"
+#include "G4AutoLock.hh"
 #include "G4ios.hh"
-#include "FTFP_BERT.hh"
-#include "G4EmStandardPhysics.hh"
-#include "G4StepLimiterPhysics.hh"
-#include "SensitiveDetector.hh"
+#include <fstream>
+
+namespace
+{
+G4Mutex opticalCsvMutex = G4MUTEX_INITIALIZER;
+}
+
+void EventAction::CountOpticalProduced()
+{
+    ++fOptProduced;
+}
+
+void EventAction::CountOpticalProducedByScintillation()
+{
+    ++fOptProducedByScintillation;
+}
+
+void EventAction::CountOpticalProducedByCerenkov()
+{
+    ++fOptProducedByCerenkov;
+}
+
+void EventAction::CountOpticalProducedByOther()
+{
+    ++fOptProducedByOther;
+}
+
+void EventAction::CountStepOpBoundary()
+{
+    ++fStepOpBoundary;
+}
+
+void EventAction::CountStepOpRayleigh()
+{
+    ++fStepOpRayleigh;
+}
+
+void EventAction::CountStepDiffraction()
+{
+    ++fStepDiffraction;
+}
+
+void EventAction::CountStepOpAbsorption()
+{
+    ++fStepOpAbsorption;
+}
+
+void EventAction::CountStepTransportation()
+{
+    ++fStepTransportation;
+}
+
+void EventAction::CountStepOtherProcess()
+{
+    ++fStepOtherProcess;
+}
+
+void EventAction::CountOpticalDetected()
+{
+    ++fOptDetected;
+}
+
+void EventAction::CountOpticalAbsorbed()
+{
+    ++fOptAbsorbed;
+}
+
+void EventAction::CountOpticalEscaped()
+{
+    ++fOptEscaped;
+}
+
+void EventAction::CountOpticalTerminatedOther()
+{
+    ++fOptTerminatedOther;
+}
 
 void EventAction::BeginOfEventAction(const G4Event *)
 {
+    fOptProduced = 0;
+    fOptProducedByScintillation = 0;
+    fOptProducedByCerenkov = 0;
+    fOptProducedByOther = 0;
+    fStepOpBoundary = 0;
+    fStepOpRayleigh = 0;
+    fStepDiffraction = 0;
+    fStepOpAbsorption = 0;
+    fStepTransportation = 0;
+    fStepOtherProcess = 0;
+    fOptDetected = 0;
+    fOptAbsorbed = 0;
+    fOptEscaped = 0;
+    fOptTerminatedOther = 0;
 }
 
 void EventAction::EndOfEventAction(const G4Event *event)
 {
-    G4TrajectoryContainer *trajectoryContainer = event->GetTrajectoryContainer();
-    std::size_t n_trajectories = 0;
-    if (trajectoryContainer)
-        n_trajectories = trajectoryContainer->entries();
-    std::cout << n_trajectories << G4endl;
-    G4int eventID = event->GetEventID();
-    if (eventID < 100 || eventID % 100 == 0)
-    {
-        G4cout << ">>> Event: " << eventID << G4endl;
-        if (trajectoryContainer)
-        {
-            G4cout << "    " << n_trajectories
-                   << " trajectories stored in this event." << G4endl;
-            G4int n = event->GetHCofThisEvent()->GetNumberOfCollections();
-            G4cout << n << G4endl;
-        }
-        /*G4VHitsCollection* hc = event->GetHCofThisEvent()->GetHC(0);
-        if (hc) {
-            G4cout << "    "
-           << hc->GetName() << " hits stored in this event" << G4endl;
-        }*/
-
-        // std::cout << hc << G4endl;
-        // if (hc) {
-        // G4cout << "    "
-        //  << hc << " hits stored in this event" << G4endl;
-        // }
-    }
+    G4AutoLock lock(&opticalCsvMutex);
+    std::ofstream outputFile("optical_photons.csv", std::ios::app);
+    outputFile << event->GetEventID() << ","
+               << fOptProduced << ","
+               << fOptProducedByScintillation << ","
+               << fOptProducedByCerenkov << ","
+               << fOptProducedByOther << ","
+               << fStepOpBoundary << ","
+               << fStepOpRayleigh << ","
+               << fStepDiffraction << ","
+               << fStepOpAbsorption << ","
+               << fStepTransportation << ","
+               << fStepOtherProcess << ","
+               << fOptDetected << ","
+               << fOptAbsorbed << ","
+               << fOptEscaped << ","
+               << fOptTerminatedOther << "\n";
 }

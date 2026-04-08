@@ -2,6 +2,7 @@
 #include "PrimaryGeneratorAction.hh"
 #include "RunAction.hh"
 #include "EventAction.hh"
+#include "SteppingAction.hh"
 
 void ActionInitialization::BuildForMaster() const
 {
@@ -12,5 +13,7 @@ void ActionInitialization::Build() const
 {
 	SetUserAction(new PrimaryGeneratorAction);
 	SetUserAction(new RunAction);
-	SetUserAction(new EventAction);
+	auto eventAction = new EventAction;
+	SetUserAction(eventAction);
+	SetUserAction(new SteppingAction(eventAction));
 }
