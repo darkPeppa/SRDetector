@@ -9,13 +9,8 @@
 #include "G4VisExecutive.hh"
 #include "G4UIExecutive.hh"
 #include "G4StepLimiterPhysics.hh"
-#include "G4Scintillation.hh"
-#include "G4OpticalPhoton.hh"
-#include "G4Scintillation.hh"
-#include "G4OpAbsorption.hh"
-#include "G4OpRayleigh.hh"
-#include "G4OpBoundaryProcess.hh"
 #include "G4OpticalPhysics.hh"
+#include "G4OpticalParameters.hh"
 #include "G4AnalysisManager.hh"
 
 
@@ -28,18 +23,20 @@ int main(int argc, char** argv)
     runManager->SetUserInitialization(new DetectorConstruction());
     auto physicsList = new FTFP_BERT;
     physicsList->RegisterPhysics(new G4StepLimiterPhysics());
-    G4Scintillation* scintProcess = new G4Scintillation();
-    
-    scintProcess->SetTrackSecondariesFirst(true);
-    
-    
-    G4OpAbsorption* absorption = new G4OpAbsorption();
-    G4OpRayleigh* rayleigh = new G4OpRayleigh();
-    G4OpBoundaryProcess* boundary = new G4OpBoundaryProcess();
     G4OpticalPhysics* opticalPhysics = new G4OpticalPhysics();
     
-  auto opticalParams = G4OpticalParameters::Instance();
+    auto opticalParams = G4OpticalParameters::Instance();
     opticalParams->SetBoundaryVerboseLevel(3);
+    opticalParams->SetProcessActivation("Cerenkov", true);
+    opticalParams->SetProcessActivation("Scintillation", true);
+    opticalParams->SetProcessActivation("OpAbsorption", true);
+    opticalParams->SetProcessActivation("OpRayleigh", true);
+    opticalParams->SetProcessActivation("OpMieHG", true); // diffraction-like optical scattering
+    opticalParams->SetProcessActivation("OpBoundary", true);
+    opticalParams->SetCerenkovTrackSecondariesFirst(true);
+    opticalParams->SetScintTrackSecondariesFirst(true);
+    opticalParams->SetScintFiniteRiseTime(false);
+
     opticalPhysics->SetVerboseLevel(1);
     G4AnalysisManager::Instance()->SetVerboseLevel(1);
     

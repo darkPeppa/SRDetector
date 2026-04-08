@@ -230,26 +230,27 @@ G4VPhysicalVolume* DetectorConstruction::Construct() {
         G4Material* envelope_mat = nist->FindOrBuildMaterial("G4_AIR");
         
         
-        G4Material* shell_mat = nist->FindOrBuildMaterial("G4_Al");
+        G4Material* coating_mat = nist->FindOrBuildMaterial("G4_Al");
         G4Material* core_mat = nist->FindOrBuildMaterial("G4_CESIUM_IODIDE");
 
 
 G4MaterialPropertiesTable* csiMPT = new G4MaterialPropertiesTable();
 
-const G4int NUM = 2;
-G4double pp[NUM] = {2.48*eV, 3.1*eV};
-G4double scintil[NUM] = {1.0, 1.0};  
+const G4int NUM = 6;
+G4double pp[NUM] = {1.9*eV, 2.15*eV, 2.30*eV, 2.45*eV, 2.75*eV, 3.10*eV};
+G4double scintil[NUM] = {0.10, 0.60, 1.00, 0.80, 0.25, 0.05};
 csiMPT->AddProperty("SCINTILLATIONCOMPONENT1", pp, scintil, NUM);
 
-csiMPT->AddConstProperty("SCINTILLATIONTIMECONSTANT1", 1.0*ns); 
-csiMPT->AddConstProperty("SCINTILLATIONYIELD", 50000/MeV);     
+csiMPT->AddConstProperty("SCINTILLATIONTIMECONSTANT1", 1000.*ns);
+csiMPT->AddConstProperty("SCINTILLATIONYIELD", 54000./MeV);
+csiMPT->AddConstProperty("SCINTILLATIONYIELD1", 1.0);
 
-G4double rindex[NUM] = {1.78, 1.78}; 
+G4double rindex[NUM] = {1.78, 1.79, 1.80, 1.80, 1.81, 1.82};
 csiMPT->AddProperty("RINDEX", pp, rindex, NUM);
 
-G4double absorption[NUM] = {5.0*m, 5.0*m};
+G4double absorption[NUM] = {35.*cm, 35.*cm, 30.*cm, 28.*cm, 25.*cm, 22.*cm};
 csiMPT->AddProperty("ABSLENGTH", pp, absorption, NUM);
-csiMPT->AddConstProperty("RESOLUTIONSCALE", 0.04);
+csiMPT->AddConstProperty("RESOLUTIONSCALE", 1.0);
 
 core_mat->SetMaterialPropertiesTable(csiMPT);
 
@@ -267,7 +268,7 @@ G4double ePhoton[num] = {1.0*eV, 2.26*eV, 3.54*eV, 4.96*eV, 6.20*eV};
 G4double reflectivity[num] = {0.92, 0.90, 0.88, 0.85, 0.82}; 
 
 alMPT->AddProperty("REFLECTIVITY", ePhoton, reflectivity, num);
-shell_mat->SetMaterialPropertiesTable(alMPT);
+coating_mat->SetMaterialPropertiesTable(alMPT);
 
 
 G4OpticalSurface* alSurface = new G4OpticalSurface("AlSurface");
@@ -306,6 +307,7 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
     tube_mat->AddElement(na, 0.038 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
     tube_mat->AddElement(al, 0.04 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
     tube_mat->AddElement(o, 1.59 / (1.59 + 0.55 + 0.3 + 0.092 + 0.038 + 0.04));
+    G4Material *shell_mat = tube_mat;
 
 
 
@@ -327,40 +329,51 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
         G4LogicalVolume* logicTube = new G4LogicalVolume(solidTube, tube_mat, "MainTube");
         G4PVPlacement* physTube = new G4PVPlacement(0, G4ThreeVector(0,0,0), logicTube, "MainTube", logicEnvelope, false, 0);
 
-        G4double outer_radius = 0.012*cm; 
-        G4double inner_radius = 0.01*cm;  
-        G4double spacing = 2*outer_radius;
+        G4double outer_radius = 0.012*cm;
+        G4double inner_radius = 0.01*cm;
+        G4double al_coating_thickness = 0.0002*cm;
+        G4double coating_outer_radius = inner_radius + al_coating_thickness;
+        const G4bool checkOverlaps = true;
 
-        
-        std::vector<G4ThreeVector> positions;
-        positions.push_back(G4ThreeVector(0,0,0));
-
-        int rings = static_cast<int>((tube_radius - outer_radius)/spacing) + 1;
-        for (int ring = 1; ring <= rings; ++ring) {
-            int channels_in_ring = 6*ring;
-            for (int i = 0; i < channels_in_ring; ++i) {
-                G4double angle = 2*3.14 * i/channels_in_ring;
-                G4double distance = ring*spacing;
-                G4double x = distance * std::cos(angle);
-                G4double y = distance * std::sin(angle);
-                positions.push_back(G4ThreeVector(x,y,0));
-            }
+        std::vector<G4TwoVector> hexagon(6);
+        for (G4int i = 0; i < 6; ++i)
+        {
+            const G4double angle = twopi * i / 6.0;
+            hexagon[i] = G4TwoVector(outer_radius * std::cos(angle), outer_radius * std::sin(angle));
         }
 
-     
-        G4Tubs* solidShell = new G4Tubs("MicroShell", 0, outer_radius, tube_height/2, 0, 360*deg);
-        
+        G4ExtrudedSolid* solidShell =
+            new G4ExtrudedSolid("MicroShell", hexagon, tube_height / 2.0, G4TwoVector(), 1.0, G4TwoVector(), 1.0);
+        G4Tubs* solidCoating = new G4Tubs("MicroCoating", inner_radius, coating_outer_radius, tube_height/2, 0, 360*deg);
         G4Tubs* solidCore = new G4Tubs("MicroCore", 0, inner_radius, tube_height/2, 0, 360*deg);
 
         G4LogicalVolume* logicShell = new G4LogicalVolume(solidShell, shell_mat, "MicroShell");
+        G4LogicalVolume* logicCoating = new G4LogicalVolume(solidCoating, coating_mat, "MicroCoating");
         G4LogicalVolume* logicCore = new G4LogicalVolume(solidCore, core_mat, "MicroCore");
-        new G4LogicalSkinSurface("AlSurface", logicShell, alSurface);
-       
-        for (size_t i = 0; i < positions.size(); ++i) {
-           
-            if (positions[i].perp() + outer_radius <= tube_radius) {
-                new G4PVPlacement(0, positions[i], logicShell, "MicroShell", logicTube, false, i);
-                new G4PVPlacement(0, G4ThreeVector(0,0,0), logicCore, "MicroCore", logicShell, false, i);
+        new G4LogicalSkinSurface("AlSurface", logicCoating, alSurface);
+
+        // One core placement per shell logical volume; all physical shell copies inherit it.
+        new G4PVPlacement(0, G4ThreeVector(), logicCoating, "MicroCoating", logicShell, false, 0, checkOverlaps);
+        new G4PVPlacement(0, G4ThreeVector(), logicCore, "MicroCore", logicShell, false, 0, checkOverlaps);
+
+        const G4double pitchX = std::sqrt(3.0) * outer_radius;
+        const G4double pitchY = 1.5 * outer_radius;
+        const G4int gridRadius = static_cast<G4int>(tube_radius / pitchX) + 2;
+        G4int copyNo = 0;
+
+        for (G4int q = -gridRadius; q <= gridRadius; ++q)
+        {
+            for (G4int r = -gridRadius; r <= gridRadius; ++r)
+            {
+                const G4double x = pitchX * (q + 0.5 * r);
+                const G4double y = pitchY * r;
+                const G4ThreeVector pos(x, y, 0.);
+
+                if (pos.perp() + outer_radius <= tube_radius)
+                {
+                    new G4PVPlacement(0, pos, logicShell, "MicroShell", logicTube, false, copyNo, checkOverlaps);
+                    ++copyNo;
+                }
             }
         }
 

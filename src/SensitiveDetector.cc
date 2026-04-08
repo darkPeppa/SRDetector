@@ -4,8 +4,10 @@
 #include "G4SDManager.hh"
 #include "G4ios.hh"
 #include "G4VProcess.hh" 
+#include "G4RunManager.hh"
+#include "G4Event.hh"
 #include "SensitiveDetector.hh"
-#include "G4AnalysisManager.hh"
+#include <fstream>
 
 SDet::SDet(const G4String &name,
            const G4String &hitsCollectionName) : G4VSensitiveDetector(name)
@@ -23,32 +25,58 @@ void SDet::Initialize(G4HCofThisEvent *hce)
 
 G4bool SDet::ProcessHits(G4Step *aStep, G4TouchableHistory * history)
 {
-    std::ofstream outputFile;
-    outputFile.open("hits_immediate.csv", std::ios::app);
+    if (!aStep || !fHitsCollection)
+    {
+        return false;
+    }
+
+    const auto *preStepPoint = aStep->GetPreStepPoint();
+    if (!preStepPoint)
+    {
+        return false;
+    }
+
+    const auto &touchable = preStepPoint->GetTouchableHandle();
+    const auto *volume = touchable->GetVolume();
+    if (!volume || volume->GetName() != "MicroCore")
+    {
+        return false;
+    }
+
     G4double edep = aStep->GetTotalEnergyDeposit();
+    if (edep <= 0.)
+    {
+        return false;
+    }
     
     auto newHit = new SDHits();
     newHit->SetTrackID(aStep->GetTrack()->GetTrackID());
-    newHit->SetElementNb(aStep->GetPreStepPoint()->GetTouchableHandle()->GetCopyNumber());
+    newHit->SetElementNb(touchable->GetCopyNumber());
     newHit->SetEdep(edep);
     newHit->SetPos(aStep->GetPostStepPoint()->GetPosition());
     fHitsCollection->insert(newHit);
-    auto analysisManager = G4AnalysisManager::Instance();
-        //analysisManager->FillNtupleIColumn(0,aStep->GetTrack()->GetTrackID());
-        //analysisManager->FillNtupleIColumn(1,aStep->GetTrack()->GetTrackID());
-       // analysisManager->FillNtupleSColumn(2,aStep->GetTrack()->GetParticleDefinition()->GetParticleName());
-        analysisManager->FillNtupleDColumn(3,edep);
-       // analysisManager->FillNtupleDColumn(4,aStep->GetPostStepPoint()->GetPosition().getX());
-       // analysisManager->FillNtupleDColumn(5,aStep->GetPostStepPoint()->GetPosition().getY());
-       // analysisManager->FillNtupleDColumn(6,aStep->GetPostStepPoint()->GetPosition().getZ());
-       // analysisManager->FillNtupleSColumn(7,aStep->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName());
-        analysisManager->AddNtupleRow();
-        analysisManager->Write();
-        outputFile<<aStep->GetTrack()->GetTrackID() <<"," <<aStep->GetTrack()->GetParticleDefinition()->GetParticleName() <<"," << edep <<","
-           << aStep->GetPostStepPoint()->GetPosition().getX()  << ","
-           << aStep->GetPostStepPoint()->GetPosition().getY() << ","
-           << aStep->GetPostStepPoint()->GetPosition().getZ() << aStep->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName() <<","
-           << "}\n";
+
+    const auto *postStepPoint = aStep->GetPostStepPoint();
+    const auto *process = postStepPoint ? postStepPoint->GetProcessDefinedStep() : nullptr;
+    const G4String processName = process ? process->GetProcessName() : "UndefinedProcess";
+
+    G4int eventID = -1;
+    const auto *currentEvent = G4RunManager::GetRunManager()->GetCurrentEvent();
+    if (currentEvent)
+    {
+        eventID = currentEvent->GetEventID();
+    }
+
+    std::ofstream outputFile("hits_immediate.csv", std::ios::app);
+    outputFile << eventID << ","
+               << aStep->GetTrack()->GetTrackID() << ","
+               << touchable->GetCopyNumber() << ","
+               << aStep->GetTrack()->GetParticleDefinition()->GetParticleName() << ","
+               << edep << ","
+               << postStepPoint->GetPosition().getX() << ","
+               << postStepPoint->GetPosition().getY() << ","
+               << postStepPoint->GetPosition().getZ() << ","
+               << processName << "\n";
     return true;
 }
 
