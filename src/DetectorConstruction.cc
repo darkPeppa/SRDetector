@@ -332,7 +332,10 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
         G4double outer_radius = 0.012*cm;
         G4double inner_radius = 0.01*cm;
         G4double al_coating_thickness = 0.0002*cm;
-        G4double coating_outer_radius = inner_radius + al_coating_thickness;
+        const G4double geom_gap = 1.e-5*cm; // small safety gap to avoid overlap warnings
+        G4double core_radius = inner_radius - geom_gap;
+        G4double coating_inner_radius = inner_radius + geom_gap;
+        G4double coating_outer_radius = inner_radius + al_coating_thickness - geom_gap;
         const G4bool checkOverlaps = true;
 
         std::vector<G4TwoVector> hexagon(6);
@@ -344,8 +347,14 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
 
         G4ExtrudedSolid* solidShell =
             new G4ExtrudedSolid("MicroShell", hexagon, tube_height / 2.0, G4TwoVector(), 1.0, G4TwoVector(), 1.0);
-        G4Tubs* solidCoating = new G4Tubs("MicroCoating", inner_radius, coating_outer_radius, tube_height/2, 0, 360*deg);
-        G4Tubs* solidCore = new G4Tubs("MicroCore", 0, inner_radius, tube_height/2, 0, 360*deg);
+        if (coating_outer_radius <= coating_inner_radius)
+        {
+            coating_inner_radius = inner_radius;
+            coating_outer_radius = inner_radius + al_coating_thickness;
+        }
+
+        G4Tubs* solidCoating = new G4Tubs("MicroCoating", coating_inner_radius, coating_outer_radius, tube_height/2, 0, 360*deg);
+        G4Tubs* solidCore = new G4Tubs("MicroCore", 0, core_radius, tube_height/2, 0, 360*deg);
 
         G4LogicalVolume* logicShell = new G4LogicalVolume(solidShell, shell_mat, "MicroShell");
         G4LogicalVolume* logicCoating = new G4LogicalVolume(solidCoating, coating_mat, "MicroCoating");
@@ -356,8 +365,9 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
         new G4PVPlacement(0, G4ThreeVector(), logicCoating, "MicroCoating", logicShell, false, 0, checkOverlaps);
         new G4PVPlacement(0, G4ThreeVector(), logicCore, "MicroCore", logicShell, false, 0, checkOverlaps);
 
-        const G4double pitchX = std::sqrt(3.0) * outer_radius;
-        const G4double pitchY = 1.5 * outer_radius;
+        const G4double packing_gap_factor = 1.02;
+        const G4double pitchX = std::sqrt(3.0) * outer_radius * packing_gap_factor;
+        const G4double pitchY = 1.5 * outer_radius * packing_gap_factor;
         const G4int gridRadius = static_cast<G4int>(tube_radius / pitchX) + 2;
         G4int copyNo = 0;
 
@@ -369,7 +379,7 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
                 const G4double y = pitchY * r;
                 const G4ThreeVector pos(x, y, 0.);
 
-                if (pos.perp() + outer_radius <= tube_radius)
+                if (pos.perp() + outer_radius * 1.01 <= tube_radius)
                 {
                     new G4PVPlacement(0, pos, logicShell, "MicroShell", logicTube, false, copyNo, checkOverlaps);
                     ++copyNo;
