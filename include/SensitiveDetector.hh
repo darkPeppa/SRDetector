@@ -1,7 +1,7 @@
 #include "G4VSensitiveDetector.hh"
 #include "SDHits.hh"
 #include <vector>
-#pragma once;
+#pragma once
 class G4Step;
 class G4HCofThisEvent;
 

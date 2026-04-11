@@ -1,6 +1,6 @@
 #include "G4UserRunAction.hh"
 #include "globals.hh"
-#pragma once;
+#pragma once
 
 class G4Run;
 

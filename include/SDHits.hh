@@ -4,7 +4,7 @@
 #include "G4ThreeVector.hh"
 #include "tls.hh"
 
-#pragma once;
+#pragma once
 class SDHits : public G4VHit
 {
 public:

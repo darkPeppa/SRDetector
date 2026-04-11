@@ -1,6 +1,6 @@
 #include "G4UserSteppingAction.hh"
 #include "globals.hh"
-#pragma once;
+#pragma once
 
 class G4Step;
 class EventAction;

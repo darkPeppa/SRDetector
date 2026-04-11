@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.26)
+
 project(B1)
 option(WITH_GEANT4_UIVIS "Build example with Geant4 UI and Vis drivers" ON)
 if(WITH_GEANT4_UIVIS)

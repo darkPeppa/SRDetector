@@ -2,7 +2,7 @@
 #include "globals.hh"
 #include "SensitiveDetector.hh"
 
-#pragma once;
+#pragma once
 
 class G4VPhysicalVolume;
 

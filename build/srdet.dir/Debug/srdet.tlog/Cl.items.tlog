@@ -1,8 +1,0 @@
-D:\detector\SRDetector\srdet.cc;D:\detector\SRDetector\build\srdet.dir\Debug\srdet.obj
-D:\detector\SRDetector\src\ActionInitialization.cc;D:\detector\SRDetector\build\srdet.dir\Debug\ActionInitialization.obj
-D:\detector\SRDetector\src\DetectorConstruction.cc;D:\detector\SRDetector\build\srdet.dir\Debug\DetectorConstruction.obj
-D:\detector\SRDetector\src\EventAction.cc;D:\detector\SRDetector\build\srdet.dir\Debug\EventAction.obj
-D:\detector\SRDetector\src\PrimaryGeneratorAction.cc;D:\detector\SRDetector\build\srdet.dir\Debug\PrimaryGeneratorAction.obj
-D:\detector\SRDetector\src\RunAction.cc;D:\detector\SRDetector\build\srdet.dir\Debug\RunAction.obj
-D:\detector\SRDetector\src\SDHits.cc;D:\detector\SRDetector\build\srdet.dir\Debug\SDHits.obj
-D:\detector\SRDetector\src\SensitiveDetector.cc;D:\detector\SRDetector\build\srdet.dir\Debug\SensitiveDetector.obj

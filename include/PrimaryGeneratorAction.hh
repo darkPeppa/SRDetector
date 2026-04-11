@@ -2,7 +2,7 @@
 #include "G4ParticleGun.hh"
 #include "globals.hh"
 
-#pragma once;
+#pragma once
 
 class G4ParticleGun;
 class G4Event;

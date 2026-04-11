@@ -1,6 +1,6 @@
 #include "G4UserEventAction.hh"
 #include "globals.hh"
-#pragma once;
+#pragma once
 class EventAction : public G4UserEventAction
 {
 public:
