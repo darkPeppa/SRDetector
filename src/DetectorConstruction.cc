@@ -341,7 +341,7 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
         std::vector<G4TwoVector> hexagon(6);
         for (G4int i = 0; i < 6; ++i)
         {
-            const G4double angle = twopi * i / 6.0;
+            const G4double angle = twopi * i / 6.0 + pi / 6.0;
             hexagon[i] = G4TwoVector(outer_radius * std::cos(angle), outer_radius * std::sin(angle));
         }
 
@@ -365,9 +365,9 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
         new G4PVPlacement(0, G4ThreeVector(), logicCoating, "MicroCoating", logicShell, false, 0, checkOverlaps);
         new G4PVPlacement(0, G4ThreeVector(), logicCore, "MicroCore", logicShell, false, 0, checkOverlaps);
 
-        const G4double packing_gap_factor = 1.02;
-        const G4double pitchX = std::sqrt(3.0) * outer_radius * packing_gap_factor;
-        const G4double pitchY = 1.5 * outer_radius * packing_gap_factor;
+        const G4double packing_gap_factor = 1.03;
+        const G4double pitchX = 1.5 * outer_radius * packing_gap_factor;
+        const G4double pitchY = std::sqrt(3.0) * outer_radius * packing_gap_factor;
         const G4int gridRadius = static_cast<G4int>(tube_radius / pitchX) + 2;
         G4int copyNo = 0;
 
@@ -375,8 +375,8 @@ alSurface->SetMaterialPropertiesTable(surfaceMPT);
         {
             for (G4int r = -gridRadius; r <= gridRadius; ++r)
             {
-                const G4double x = pitchX * (q + 0.5 * r);
-                const G4double y = pitchY * r;
+                const G4double x = pitchX * q;
+                const G4double y = pitchY * (r + 0.5 * q);
                 const G4ThreeVector pos(x, y, 0.);
 
                 if (pos.perp() + outer_radius * 1.01 <= tube_radius)
