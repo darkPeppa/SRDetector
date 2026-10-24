@@ -19,6 +19,7 @@ configs/history/          ├── analysis: метрики, sanity-прове�
 | `configs/defaults.yaml` | все параметры с комментариями |
 | `configs/detector/` | готовые конфигурации (full, unit, cluster7, slab, legacy_like) |
 | `configs/studies/` | автоматические эксперименты U01–U10, B01–B02, F01 |
+| `configs/optimize/` | спецификации поиска оптимума O01–O03 |
 | `configs/history/` | бэкапы всех запускавшихся конфигураций |
 | `macros/` | vis-макросы и примеры ручных GPS-пучков |
 | `tools/` | сопровождение данных: XCOM, конвертация, слияние, сравнение конфигов, сбор отчётов, очистка |
@@ -68,9 +69,14 @@ configs/history/          ├── analysis: метрики, sanity-прове�
 | `analysis.py` | загрузка (uproot), метрики, sanity-проверки |
 | `plotting.py` | стиль, графики прогона и исследований |
 | `studies.py` | развёртка сеток и вариантов, отчёты с автоматическими наблюдениями |
+| `optimize.py`, `optimize_plots.py` | поиск оптимума: пространство параметров, LHS/grid, successive halving, уточнение, проверка с повторами, Парето, `best.yaml` |
 | `archive.py` | упаковка в `results/` с контролем размера |
 | `catalog.py` | зеркало C++ каталогов (синхронность проверяет тест) |
 | `cli.py` | команда `srdet` |
+| `web/server.py` | FastAPI: каталоги, схема формы, задачи, прогоны, исследования, оптимизации, документы, файлы |
+| `web/jobs.py` | очередь задач (`srdet ...` в подпроцессах, по одной), журнал `runs/web_jobs/` |
+| `web/schema.py` | схема формы из `configs/defaults.yaml` (тип, единицы, подсказка, варианты из каталогов) |
+| `web/static/` | одностраничный UI: `index.html` (Alpine.js), `app.js`, `geometry.js` (SVG-геометрия), `style.css` |
 
 ## Ntuple `events` (одна строка на событие)
 

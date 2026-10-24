@@ -52,7 +52,7 @@ def is_ok(d: Path) -> bool:
     s = d / "STATUS"
     if s.exists():
         return s.read_text().startswith("ok")
-    return (d / "results.csv").exists()  # study folder
+    return (d / "results.csv").exists() or (d / "trials.csv").exists()  # study / optimisation folder
 
 
 def pack(path: str | Path, budget_mb: float = 45.0, out_dir: Path | None = None, force: bool = False) -> Path:

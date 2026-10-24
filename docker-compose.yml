@@ -1,3 +1,4 @@
+# docker compose up web                         -> http://localhost:8080 (browser UI)
 # docker compose run --rm srdet <command>      e.g. `docker compose run --rm srdet study coating`
 # docker compose --profile root run --rm --service-ports root jsroot   (ROOT / JSROOT web browser)
 # docker compose --profile lab up jupyter                               (JupyterLab on :8888)
@@ -14,6 +15,20 @@ services:
     environment:
       - SRDET_THREADS=${SRDET_THREADS:-0}
       - PYTHONPATH=/work/python   # edits of python/srdet take effect without rebuilding the image
+      - PYTHONUNBUFFERED=1        # progress lines appear immediately
+
+  web:
+    image: srdet:latest
+    working_dir: /work
+    volumes:
+      - ./:/work
+    environment:
+      - SRDET_THREADS=${SRDET_THREADS:-0}
+      - PYTHONPATH=/work/python
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "${SRDET_WEB_PORT:-8080}:8080"
+    command: ["web", "--port", "8080"]
 
   root:
     profiles: ["root"]

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.6
 # SRDetector: Geant4 is built from source inside the image.
 #
 # Targets:

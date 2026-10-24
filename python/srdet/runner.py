@@ -88,7 +88,7 @@ def check_output(run_dir: Path, log: str, rc: int) -> tuple[bool, str]:
 
 
 def run(cfg: dict, name: str | None = None, parent: Path | None = None, analyze: bool = True,
-        quiet: bool = False, backup: bool = True) -> RunResult:
+        quiet: bool = False, backup: bool = True, plots: bool = True) -> RunResult:
     name = name or cfg.get("name", "run")
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     base = parent if parent else runs_dir()
@@ -125,7 +125,7 @@ def run(cfg: dict, name: str | None = None, parent: Path | None = None, analyze:
     if ok and analyze:
         try:
             from .analysis import analyze_run
-            analyze_run(run_dir, plots=True)
+            analyze_run(run_dir, plots=plots)
         except Exception as e:  # analysis failure does not hide a good simulation
             reason = f"analysis failed: {e}"
             ok = False

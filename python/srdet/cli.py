@@ -3,6 +3,8 @@
   srdet run CONFIG [--set key=value ...] [--events N] [--archive]   custom run
   srdet study NAME [--quick] [--archive]                            automatic experiment (configs/studies)
   srdet study --list | srdet study all [--quick]
+  srdet optimize NAME [--quick] [--resume DIR] [--archive]         search optimal parameters (configs/optimize)
+  srdet optimize --list
   srdet analyze RUN_DIR                                             (re)compute metrics + plots
   srdet compare RUN_DIR RUN_DIR ...                                 table of metrics
   srdet archive RUN_OR_STUDY_DIR                                    pack into results/ for git
@@ -12,6 +14,7 @@
   srdet vis CONFIG                                                  geometry pictures (VRML + PNG)
   srdet jsroot PATH.root                                            browse a ROOT file in the browser
   srdet shell                                                       interactive Geant4 session
+  srdet web [--port 8080]                                           browser UI (configure, run, analyse, docs)
   srdet validate [--quick]                                          physics sanity tests (pytest)
 """
 from __future__ import annotations
@@ -72,6 +75,20 @@ def cmd_study(args) -> int:
     if failed:
         print(f"[srdet] failed studies: {', '.join(failed)}")
     return 1 if failed else 0
+
+
+def cmd_optimize(args) -> int:
+    from .archive import pack
+    from .optimize import load_spec, run_optimization, spec_files
+    if args.list or not args.name:
+        for k in spec_files():
+            print(f"{k:28s} {load_spec(k).get('title', '')}")
+        return 0
+    d = run_optimization(args.name, quick=args.quick, resume=Path(args.resume) if args.resume else None,
+                         extra_sets=args.set)
+    if args.archive:
+        pack(d)
+    return 0
 
 
 def cmd_analyze(args) -> int:
@@ -188,6 +205,13 @@ buildGUI('gui').then(h => h.openRootFile('{p.name}'));
     return 0
 
 
+def cmd_web(args) -> int:
+    from .web.server import main as serve
+    print(f"[srdet] web UI on http://localhost:{args.port}")
+    serve(args.host, args.port)
+    return 0
+
+
 def cmd_shell(args) -> int:
     from .paths import sim_binary
     return subprocess.call([sim_binary()])
@@ -226,6 +250,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set", action="append", default=[])
     p.set_defaults(fn=cmd_study)
 
+    p = sub.add_parser("optimize", help="search optimal detector / material parameters (configs/optimize)")
+    p.add_argument("name", nargs="?")
+    p.add_argument("--list", action="store_true")
+    p.add_argument("--quick", action="store_true", help="tiny budget (smoke test)")
+    p.add_argument("--resume", help="continue a previous optimisation folder (finished trials are reused)")
+    p.add_argument("--archive", action="store_true")
+    p.add_argument("--set", action="append", default=[], help="override of the base config")
+    p.set_defaults(fn=cmd_optimize)
+
     p = sub.add_parser("analyze", help="metrics and plots of a run (or a study report)")
     p.add_argument("path")
     p.set_defaults(fn=cmd_analyze)
@@ -263,6 +296,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("path")
     p.add_argument("--port", type=int, default=8090)
     p.set_defaults(fn=cmd_jsroot)
+
+    p = sub.add_parser("web", help="browser UI")
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=8080)
+    p.set_defaults(fn=cmd_web)
 
     p = sub.add_parser("shell", help="interactive Geant4 terminal")
     p.set_defaults(fn=cmd_shell)

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "srdet-web",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "up", "web"],
+      "port": 8080
+    }
+  ]
+}

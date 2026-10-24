@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: pip install -r python/requirements.txt && pip install -e python
-      - run: pytest -q tests/test_python.py
+      - run: pytest -q tests/test_python.py tests/test_optimize.py tests/test_web.py
 
   geant4:
     name: Build image + physics sanity tests

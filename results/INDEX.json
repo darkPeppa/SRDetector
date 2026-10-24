@@ -56,11 +56,19 @@
     "size_MB": 5.195
   },
   {
-    "archive": "20261024-195823_U10_energy.tar.xz",
-    "size_MB": 6.918
-  },
-  {
     "archive": "20261024-200209_U10_energy.tar.xz",
     "size_MB": 6.91
+  },
+  {
+    "archive": "20261024-205302_O01_geometry_60keV.tar.xz",
+    "size_MB": 10.336
+  },
+  {
+    "archive": "20261024-205807_O02_materials_grid.tar.xz",
+    "size_MB": 4.978
+  },
+  {
+    "archive": "20261024-210706_O03_sensor_cost.tar.xz",
+    "size_MB": 6.221
   }
 ]

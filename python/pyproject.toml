@@ -7,10 +7,14 @@ name = "srdet"
 version = "2.0.0"
 description = "Driver, analysis and reporting for the SRDetector Geant4 simulation"
 requires-python = ">=3.10"
-dependencies = ["numpy", "scipy", "pandas", "matplotlib", "pyyaml", "uproot", "awkward", "pyarrow", "tabulate"]
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "pyyaml", "uproot", "awkward", "pyarrow", "tabulate",
+                "fastapi", "uvicorn"]
 
 [project.scripts]
 srdet = "srdet.cli:main"
+
+[tool.setuptools.package-data]
+"srdet.web" = ["static/*"]
 
 [tool.setuptools.packages.find]
 where = ["."]
