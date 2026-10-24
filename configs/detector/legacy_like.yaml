@@ -1,0 +1,26 @@
+# The old code's choices with its bugs fixed (no glass gap, correct lattice), for reference:
+# Legacy_fred walls (no RINDEX, wrong composition), Al_simple coating, no window, no coupling,
+# ideal sensor, 0.5 MeV gamma beam with sigma = 1 cm (as in legacy/src/PrimaryGeneratorAction.cc).
+extends: ../defaults.yaml
+name: legacy_like
+geometry:
+  wall_material: Legacy_fred
+  window_thickness: 0 mm
+  housing_thickness: 0 mm
+  coupling_thickness: 0 mm
+  sensor: ideal
+optics:
+  coating: Al_simple
+  entrance_coating: none
+physics:
+  em: standard
+  cut_detector: 0.7 mm
+  cut_world: 0.7 mm
+beam:
+  type: gauss
+  sigma: 10 mm
+  energy: 500 keV
+materials:
+  yield_scale: 0.02
+run:
+  events: 500

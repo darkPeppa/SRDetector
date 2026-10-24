@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SRDetector</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="/static/geometry.js"></script>
+<script src="/static/app.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body>
+<div class="layout" x-data="app()" x-init="init()">
+
+<!-- ======================== sidebar ======================== -->
+<aside class="side">
+  <div class="brand">
+    <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l4.3 2.5v5L12 12 7.7 9.5v-5z"/><path d="M7.7 9.5L12 12v5l-4.3 2.5L3.4 17v-5z"/><path d="M16.3 9.5L20.6 12v5l-4.3 2.5L12 17v-5z"/></g></svg>
+    SRDetector
+  </div>
+  <nav class="nav">
+    <template x-for="n in navItems" :key="n.view">
+      <a :href="'#/' + n.view" :class="{active: route.view === n.view || (n.alt||[]).includes(route.view)}">
+        <span x-text="n.icon"></span><span x-text="n.title"></span>
+        <span class="count" x-show="n.view === 'jobs' && activeJobs > 0" x-text="activeJobs"></span>
+      </a>
+    </template>
+  </nav>
+  <div class="foot">
+    <div x-text="'srdet ' + (info.version || '')"></div>
+    <a href="#" @click.prevent="toggleTheme()">тема: <span x-text="theme"></span></a>
+  </div>
+</aside>
+
+<main class="main">
+
+<!-- ======================== dashboard ======================== -->
+<section x-show="route.view === 'dashboard'">
+  <div class="topbar"><h1>Дашборд</h1><div class="spacer"></div>
+    <a class="btn primary" href="#/new">＋ Новое моделирование</a>
+    <button class="btn" @click="submit({kind: 'validate', quick: true})">Проверка физики (quick)</button>
+  </div>
+  <div class="grid g4">
+    <div class="card kpi"><span class="v" x-text="runs.filter(r => r.status.startsWith('ok')).length"></span><span class="l">успешных прогонов (из <span x-text="runs.length"></span>)</span></div>
+    <div class="card kpi"><span class="v" x-text="studies.results.filter(r=>!r.collected).length"></span><span class="l">исследований (сеток параметров)</span></div>
+    <div class="card kpi"><span class="v" x-text="opts.results.length"></span><span class="l">оптимизаций</span></div>
+    <div class="card kpi"><span class="v" x-text="activeJobs"></span><span class="l">задач в работе / очереди</span></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h2>Лучшие найденные конфигурации</h2>
+      <div class="sub">Результат последнего запуска каждой оптимизации, проверенный повторами</div>
+      <template x-for="o in latestOpts()" :key="o.path">
+        <div style="padding:8px 0;border-bottom:1px dashed var(--border)">
+          <div class="row"><a :href="'#/opt?path=' + o.path" x-text="o.title || o.name" style="font-weight:600"></a>
+            <span class="right badge ok" x-show="o.best" x-text="o.best ? 'цель ' + fmt(o.best.objective) + ' ± ' + fmt(o.best.objective_std) : ''"></span></div>
+          <div class="small muted" x-text="o.objective"></div>
+          <div><template x-for="a in o.aliases"><span class="chip" x-text="a + ' = ' + fmt(o.best ? o.best[a] : null)"></span></template></div>
+        </div>
+      </template>
+      <div class="empty" x-show="!opts.results.length">Оптимизаций ещё нет — <a href="#/optimize">запустить</a></div>
+    </div>
+    <div class="card">
+      <h2>Задачи</h2>
+      <template x-for="j in jobs.slice(0, 7)" :key="j.id">
+        <div class="row" style="padding:6px 0;border-bottom:1px dashed var(--border)">
+          <span :class="'badge ' + jobBadge(j.status)" x-text="j.status"></span>
+          <a :href="'#/job?id=' + j.id" x-text="j.title"></a>
+          <span class="right small muted" x-text="j.created.replace('T',' ')"></span>
+        </div>
+      </template>
+      <div class="empty" x-show="!jobs.length">Задач ещё не было</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Последние прогоны <a class="right small" href="#/runs">все →</a></h2>
+    <div x-html="runsTable(runs.slice(0, 10), false)"></div>
+  </div>
+</section>
+
+<!-- ======================== new simulation ======================== -->
+<section x-show="route.view === 'new'">
+  <div class="topbar"><h1>Новое моделирование</h1><div class="spacer"></div>
+    <button class="btn" @click="showMacro()">Показать макрос Geant4</button>
+    <button class="btn" @click="resetForm()">Сбросить</button>
+  </div>
+  <div class="split">
+    <div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="row">
+          <div style="flex:1;min-width:220px">
+            <div class="small muted">Базовая конфигурация</div>
+            <select x-model="form.base" @change="loadBase()">
+              <template x-for="c in configs" :key="c.name"><option :value="c.name" x-text="c.name" :selected="c.name === form.base"></option></template>
+            </select>
+          </div>
+          <div style="flex:1;min-width:160px"><div class="small muted">Имя прогона</div><input x-model="form.name" placeholder="my_run"></div>
+          <div style="width:120px"><div class="small muted">События</div><input type="number" min="1" x-model.number="form.values['run.events']"></div>
+        </div>
+        <div class="small muted" style="margin-top:6px" x-text="(configs.find(c=>c.name===form.base)||{}).description"></div>
+      </div>
+
+      <template x-for="sec in schema.sections" :key="sec.id">
+        <details class="sec" :open="['geometry','optics','beam'].includes(sec.id)">
+          <summary><span x-text="sec.title"></span>
+            <span class="badge" x-show="changedIn(sec.id) > 0" x-text="'изменено: ' + changedIn(sec.id)"></span></summary>
+          <div>
+            <template x-for="f in sec.fields" :key="f.path">
+              <label class="f" :class="{changed: isChanged(f.path)}" x-show="fieldVisible(f)">
+                <span class="k"><span x-text="f.key"></span><small x-text="f.help"></small>
+                  <small x-show="f.choice_help && f.choice_help[form.values[f.path]]" x-text="f.choice_help ? f.choice_help[form.values[f.path]] : ''" style="color:var(--accent)"></small></span>
+                <span>
+                  <template x-if="f.kind === 'choice'">
+                    <select x-model="form.values[f.path]">
+                      <template x-for="c in f.choices"><option :value="c" x-text="c === '' ? '(по умолчанию)' : c" :selected="c === form.values[f.path]"></option></template>
+                    </select>
+                  </template>
+                  <template x-if="f.kind === 'bool'">
+                    <input type="checkbox" x-model="form.values[f.path]">
+                  </template>
+                  <template x-if="f.kind === 'int' || f.kind === 'float'">
+                    <input type="number" step="any" x-model.number="form.values[f.path]">
+                  </template>
+                  <template x-if="f.kind === 'quantity'">
+                    <span class="qty"><input type="number" step="any" :value="qtyNum(f.path)" @input="setQty(f.path, $event.target.value, null)">
+                      <select @change="setQty(f.path, null, $event.target.value)">
+                        <template x-for="u in unitsFor(f.unit_kind)"><option :value="u" x-text="u" :selected="u === qtyUnit(f.path)"></option></template>
+                      </select></span>
+                  </template>
+                  <template x-if="f.kind === 'string'">
+                    <input x-model="form.values[f.path]">
+                  </template>
+                  <template x-if="f.kind === 'list'">
+                    <textarea class="mono" rows="2" :value="(form.values[f.path] || []).join('\n')" @input="form.values[f.path] = $event.target.value.split('\n').filter(s => s.trim())" placeholder="по одной строке"></textarea>
+                  </template>
+                  <template x-if="f.kind === 'special' && f.path === 'beam.spectrum'">
+                    <span>
+                      <select x-model="form.spectrum.kind" @change="syncSpectrum()">
+                        <option value="none">моноэнергетический (beam.energy)</option>
+                        <option value="source">радиоактивный источник</option>
+                        <option value="xray_tube">рентгеновская трубка (W)</option>
+                        <option value="lines">свои линии</option>
+                      </select>
+                      <span class="row" style="margin-top:6px" x-show="form.spectrum.kind === 'source'">
+                        <select x-model="form.spectrum.source" @change="syncSpectrum()"><template x-for="s in schema.spectra.sources"><option :value="s" x-text="s"></option></template></select>
+                      </span>
+                      <span class="row" style="margin-top:6px" x-show="form.spectrum.kind === 'xray_tube'">
+                        <span class="small">кВп</span><input type="number" style="width:90px" x-model.number="form.spectrum.kvp" @input="syncSpectrum()">
+                        <span class="small">фильтр Al</span><input style="width:90px" x-model="form.spectrum.filter" @input="syncSpectrum()">
+                      </span>
+                      <textarea class="mono" rows="3" x-show="form.spectrum.kind === 'lines'" x-model="form.spectrum.lines" @input="syncSpectrum()" placeholder="E_keV, вес — по строке"></textarea>
+                    </span>
+                  </template>
+                  <template x-if="f.kind === 'special' && f.path !== 'beam.spectrum'">
+                    <input :value="form.values[f.path] ?? ''" @input="form.values[f.path] = $event.target.value || null" placeholder="пусто">
+                  </template>
+                </span>
+              </label>
+            </template>
+          </div>
+        </details>
+      </template>
+    </div>
+
+    <div class="sticky">
+      <div class="card">
+        <h2>Предпросмотр геометрии</h2>
+        <div class="sub" x-text="geoPreview().summary"></div>
+        <div class="warnbox" x-show="geoPreview().problem" x-text="geoPreview().problem"></div>
+        <div class="svgbox" x-html="geoPreview().cell"></div>
+        <div class="legend"><span><i style="background:var(--core)"></i>сцинтиллятор</span><span><i style="background:var(--coat)"></i>покрытие</span><span><i style="background:var(--wall)"></i>стенка</span></div>
+        <h3>Разрез по оси пучка</h3>
+        <div class="svgbox" x-html="geoPreview().stack"></div>
+        <h3>Изменено относительно базы</h3>
+        <div class="small"><template x-for="[k, v] in Object.entries(overrides())"><span class="chip" x-text="k + ' = ' + JSON.stringify(v)"></span></template>
+          <span class="muted" x-show="!Object.keys(overrides()).length">ничего — будет запущена базовая конфигурация</span></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" :disabled="!!geoPreview().problem" @click="launchRun(false)">▶ Запустить</button>
+          <button class="btn" :disabled="!!geoPreview().problem" @click="launchRun(true)">▶ + 3D-картинки</button>
+          <label class="row small"><input type="checkbox" x-model="form.archive"> в архив results/</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================== runs ======================== -->
+<section x-show="route.view === 'runs'">
+  <div class="topbar"><h1>Прогоны</h1><div class="spacer"></div>
+    <input style="width:240px" placeholder="фильтр по имени / покрытию / режиму" x-model="runFilter">
+    <a class="btn" :href="'#/compare'" x-show="selected.length">Сравнить выбранные (<span x-text="selected.length"></span>)</a>
+  </div>
+  <div class="card"><div class="scroll" style="max-height:none" x-html="runsTable(filteredRuns(), true)" @change="onSelect($event)"></div></div>
+</section>
+
+<section x-show="route.view === 'run'">
+  <template x-if="run">
+  <div>
+    <div class="topbar"><h1 x-text="run.name"></h1>
+      <span :class="'badge ' + (run.status.startsWith('ok') ? 'ok' : 'bad')" x-text="run.status"></span>
+      <div class="spacer"></div>
+      <button class="btn" @click="visFor(run.path + '/config.yaml', run.path)">🧊 3D-картинки геометрии</button>
+      <button class="btn" @click="rerunInForm(run)">✎ Повторить с изменениями</button>
+      <button class="btn" @click="submit({kind:'archive', path: run.path})">В архив</button>
+    </div>
+    <div class="small muted" style="margin:-10px 0 12px" x-text="[run.mode, 'L=' + run.length, run.core, run.coating, run.sensor, run.beam].filter(Boolean).join(' · ')"></div>
+    <div class="tabs">
+      <template x-for="t in ['обзор','графики','геометрия','ROOT','конфиг','файлы','лог']"><a :class="{active: runTab === t}" @click="setRunTab(t)" x-text="t"></a></template>
+    </div>
+
+    <div x-show="runTab === 'обзор'">
+      <div class="warnbox" x-show="run.sanity && run.sanity.length" style="margin-bottom:10px">Sanity: <span x-text="(run.sanity||[]).join('; ')"></span></div>
+      <div class="grid g4">
+        <template x-for="k in info.key_metrics.filter(k => run.metrics_all[k] !== undefined && run.metrics_all[k] !== null)">
+          <div class="card kpi"><span class="v" x-text="fmt(run.metrics_all[k])"></span><span class="l" x-text="label(k)"></span></div>
+        </template>
+      </div>
+      <div class="card" style="margin-top:14px"><h2>Все метрики</h2>
+        <div class="scroll"><table class="t"><tbody>
+          <template x-for="[k, v] in Object.entries(run.metrics_all)"><tr><td x-text="label(k)"></td><td class="small muted" x-text="k"></td><td class="num" x-text="fmt(v)"></td></tr></template>
+        </tbody></table></div></div>
+    </div>
+
+    <div x-show="runTab === 'графики'">
+      <div class="gallery"><template x-for="p in run.plots"><figure @click="lightbox = '/files/' + p.path"><img :src="'/files/' + p.path" loading="lazy"><figcaption x-text="p.name"></figcaption></figure></template></div>
+      <div class="empty" x-show="!run.plots.length">Графиков нет (прогон без анализа?)</div>
+    </div>
+
+    <div x-show="runTab === 'геометрия'">
+      <div class="grid g2">
+        <div class="card"><h2>Решётка сот (вид с пучка)</h2><div class="sub">колесо — масштаб, перетаскивание — сдвиг, двойной клик — сброс</div>
+          <div class="svgbox big" x-ref="lattice"></div>
+          <div class="legend"><span><i style="background:var(--core)"></i>сцинтиллятор</span><span><i style="background:var(--coat)"></i>покрытие</span><span><i style="background:var(--wall)"></i>стекло</span><span x-text="geoInfo"></span></div></div>
+        <div>
+          <div class="card"><h2>Сота крупным планом</h2><div class="svgbox" x-html="runGeo.cell"></div></div>
+          <div class="card" style="margin-top:14px"><h2>Разрез по оси пучка</h2><div class="svgbox" x-html="runGeo.stack"></div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px"><h2>Картинки Geant4 (TSG offscreen)</h2>
+        <div class="gallery"><template x-for="p in run.pictures"><figure @click="lightbox = '/files/' + p.path"><img :src="'/files/' + p.path" loading="lazy"><figcaption x-text="p.name"></figcaption></figure></template></div>
+        <div class="empty" x-show="!run.pictures.length">Ещё нет — нажмите «3D-картинки геометрии» (несколько событий с треками)</div></div>
+    </div>
+
+    <div x-show="runTab === 'ROOT'">
+      <div class="card"><h2>Интерактивный ROOT-браузер (JSROOT)</h2><div class="sub">Гистограммы и ntuple из srdet.root; двойной клик по объекту — нарисовать</div>
+        <div class="jsroot" x-ref="jsroot"></div></div>
+    </div>
+
+    <div x-show="runTab === 'конфиг'" class="grid g2">
+      <div class="card"><h2>config.yaml</h2><pre x-text="run.config_yaml"></pre></div>
+      <div class="card"><h2>run.mac</h2><pre x-text="run.macro"></pre></div>
+    </div>
+    <div x-show="runTab === 'файлы'" class="card"><table class="t"><tbody>
+      <template x-for="f in run.files"><tr><td><a :href="'/files/' + f.path" x-text="f.path.split('/').pop()" target="_blank"></a></td><td class="num muted" x-text="(f.size/1024).toFixed(1) + ' КБ'"></td></tr></template>
+    </tbody></table></div>
+    <div x-show="runTab === 'лог'" class="card"><pre class="log" x-text="run.log_tail"></pre></div>
+  </div>
+  </template>
+</section>
+
+<!-- ======================== compare ======================== -->
+<section x-show="route.view === 'compare'">
+  <div class="topbar"><h1>Сравнение прогонов</h1><div class="spacer"></div>
+    <button class="btn" @click="selected = []; saveSel(); compareRows = []">Очистить</button></div>
+  <div class="empty card" x-show="!compareRows.length">Отметьте прогоны галочками на странице <a href="#/runs">Прогоны</a></div>
+  <div x-show="compareRows.length">
+    <div class="card"><div class="row"><span class="small muted">Метрики на графике:</span>
+      <template x-for="k in info.key_metrics"><label class="row small"><input type="checkbox" :value="k" x-model="compareMetrics" @change="drawCompare()"><span x-text="label(k)"></span></label></template></div>
+      <div class="plot" x-ref="compareplot"></div></div>
+    <div class="card" style="margin-top:14px"><div class="scroll"><table class="t">
+      <thead><tr><th>метрика</th><template x-for="r in compareRows"><th x-text="r.name"></th></template></tr></thead>
+      <tbody><template x-for="k in info.key_metrics"><tr><td x-text="label(k)"></td><template x-for="r in compareRows"><td class="num" x-text="fmt(r[k])"></td></template></tr></template></tbody>
+    </table></div></div>
+  </div>
+</section>
+
+<!-- ======================== studies ======================== -->
+<section x-show="route.view === 'studies'">
+  <div class="topbar"><h1>Исследования (сканы одного параметра)</h1></div>
+  <div class="grid g3">
+    <template x-for="s in studies.specs" :key="s.name">
+      <div class="card"><h2 x-text="s.name"></h2><div class="sub" x-text="s.title"></div>
+        <div class="small muted" style="max-height:66px;overflow:hidden" x-text="s.description"></div>
+        <div class="row" style="margin-top:10px"><button class="btn sm" @click="submit({kind:'study', target:s.name, quick:true})">quick</button>
+          <button class="btn sm primary" @click="submit({kind:'study', target:s.name, archive:true})">полный + архив</button></div></div>
+    </template>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Готовые отчёты</h2>
+    <table class="t"><tbody><template x-for="r in studies.results" :key="r.path"><tr>
+      <td><a :href="'#/study?path=' + r.path" x-text="r.name"></a></td><td><span class="badge" x-text="r.collected ? 'results/' : 'runs/'"></span></td></tr></template></tbody></table></div>
+</section>
+
+<section x-show="route.view === 'study'">
+  <template x-if="study">
+  <div>
+    <div class="topbar"><h1 x-text="(study.spec && study.spec.title) || study.path"></h1></div>
+    <div class="card" x-show="study.rows.length"><h2>Интерактивный график</h2>
+      <div class="row"><span class="small muted">x:</span><select style="width:220px" x-model="studyX" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="c"></option></template></select>
+        <span class="small muted">y:</span><select style="width:260px" x-model="studyY" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="label(c) + ' (' + c + ')'"></option></template></select>
+        <span class="small muted">серии:</span><select style="width:200px" x-model="studySeries" @change="drawStudy()"><option value="">—</option><template x-for="c in studyCols()"><option :value="c" x-text="c"></option></template></select></div>
+      <div class="plot" x-ref="studyplot"></div></div>
+    <div class="card md" style="margin-top:14px" x-html="renderMd(study.report, study.path + '/report.md')"></div>
+  </div>
+  </template>
+</section>
+
+<!-- ======================== optimisation ======================== -->
+<section x-show="route.view === 'optimize'">
+  <div class="topbar"><h1>Оптимизация параметров</h1><div class="spacer"></div><a class="btn" href="#/docs?path=docs/optimization.md">как это работает</a></div>
+  <div class="grid g3">
+    <template x-for="s in opts.specs" :key="s.name">
+      <div class="card"><h2 x-text="s.name"></h2><div class="sub" x-text="s.title"></div>
+        <div class="small"><b>цель:</b> <code x-text="s.objective.expr"></code></div>
+        <div class="small" style="margin-top:4px"><b>параметры:</b> <template x-for="[a, d] in Object.entries(s.space)"><span class="chip" x-text="a + (d.values ? ' ∈ {' + d.values.join(', ') + '}' : ' ∈ [' + d.low + ', ' + d.high + ']')"></span></template></div>
+        <div class="small" style="margin-top:4px" x-show="s.constraints.length"><b>ограничения:</b> <template x-for="c in s.constraints"><span class="chip" x-text="c"></span></template></div>
+        <div class="row" style="margin-top:10px"><button class="btn sm" @click="submit({kind:'optimize', target:s.name, quick:true})">quick</button>
+          <button class="btn sm primary" @click="submit({kind:'optimize', target:s.name, archive:true})">полный + архив</button></div></div>
+    </template>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Результаты</h2>
+    <table class="t"><thead><tr><th>запуск</th><th>цель</th><th>лучшее</th><th>параметры</th></tr></thead><tbody>
+      <template x-for="r in opts.results" :key="r.path"><tr>
+        <td><a :href="'#/opt?path=' + r.path" x-text="r.name"></a> <span class="badge warn" x-show="!r.finished">идёт</span></td>
+        <td class="small"><code x-text="r.objective"></code></td>
+        <td class="num" x-text="r.best ? fmt(r.best.objective) + ' ± ' + fmt(r.best.objective_std) : '—'"></td>
+        <td><template x-for="a in r.aliases"><span class="chip" x-text="a + '=' + fmt(r.best ? r.best[a] : null)"></span></template></td></tr></template></tbody></table></div>
+</section>
+
+<section x-show="route.view === 'opt'">
+  <template x-if="opt">
+  <div>
+    <div class="topbar"><h1 x-text="opt.spec.title || opt.path"></h1><div class="spacer"></div>
+      <button class="btn primary" x-show="opt.best_path" @click="submit({kind:'run', config_path: opt.best_path, name: opt.spec.name + '_best'})">▶ Прогнать лучшую</button>
+      <button class="btn" x-show="opt.best_path" @click="submit({kind:'vis', config_path: opt.best_path})">🧊 3D лучшей</button>
+      <a class="btn" x-show="opt.best_path" :href="'/files/' + opt.best_path" download>best.yaml</a></div>
+    <div class="grid g4">
+      <div class="card kpi"><span class="v" x-text="optBest() ? fmt(optBest().objective) : '—'"></span><span class="l">цель (± <span x-text="optBest() ? fmt(optBest().objective_std) : '—'"></span>) — <code x-text="opt.spec.objective && opt.spec.objective.expr"></code></span></div>
+      <div class="card kpi"><span class="v" x-text="opt.trials.length"></span><span class="l">испытаний, допустимых <span x-text="opt.trials.filter(t => t.feasible).length"></span></span></div>
+      <div class="card"><div class="small muted">лучшие параметры</div><template x-for="a in optAliases()"><span class="chip" x-text="a + ' = ' + fmt(optBest() ? optBest()[a] : null)"></span></template></div>
+      <div class="card"><div class="small muted">ограничения</div><template x-for="c in (opt.spec.constraints || [])"><span class="chip" x-text="c"></span></template></div>
+    </div>
+    <div class="tabs" style="margin-top:14px">
+      <template x-for="t in ['дашборд','испытания','геометрия лучшей','отчёт']"><a :class="{active: optTab === t}" @click="setOptTab(t)" x-text="t"></a></template>
+    </div>
+    <div x-show="optTab === 'дашборд'">
+      <div class="grid g2">
+        <div class="card"><h2>Сходимость</h2><div class="sub">точки — испытания (× недопустимые), линия — лучший допустимый</div><div class="plot" x-ref="optconv"></div></div>
+        <div class="card"><h2>Фронт Парето</h2><div class="sub" x-text="opt.spec.pareto ? opt.spec.pareto.y + ' vs ' + opt.spec.pareto.x : 'не задан в спецификации'"></div><div class="plot" x-ref="optpareto"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h2>Параллельные координаты</h2><div class="sub">допустимые испытания; цвет — цель; можно выделять диапазоны на осях</div><div class="plot" x-ref="optpar" style="min-height:420px"></div></div>
+      <div class="card" style="margin-top:14px"><h2>Чувствительность
+          <select style="width:200px;margin-left:auto" x-model="optParam" @change="drawOptSens()"><template x-for="a in optAliases()"><option :value="a" x-text="a"></option></template></select></h2>
+        <div class="plot" x-ref="optsens"></div></div>
+      <div class="card" style="margin-top:14px" x-show="opt.final.length"><h2>Проверенные кандидаты (среднее ± σ по повторам)</h2>
+        <div class="scroll"><table class="t"><thead><tr><template x-for="c in finalCols()"><th x-text="c"></th></template></tr></thead>
+          <tbody><template x-for="r in opt.final"><tr><template x-for="c in finalCols()"><td class="num" x-text="fmt(r[c]) + (r[c + '_std'] !== undefined && typeof r[c] === 'number' ? ' ± ' + fmt(r[c + '_std']) : '')"></td></template></tr></template></tbody></table></div></div>
+    </div>
+    <div x-show="optTab === 'испытания'" class="card">
+      <div class="row"><label class="row small"><input type="checkbox" x-model="onlyFeasible"> только допустимые</label></div>
+      <div class="scroll" style="max-height:640px"><table class="t"><thead><tr><template x-for="c in trialCols()"><th x-text="c" @click="sortTrials(c)"></th></template></tr></thead>
+        <tbody><template x-for="t in sortedTrials()"><tr>
+          <template x-for="c in trialCols()"><td :class="typeof t[c] === 'number' ? 'num' : 'small'">
+            <template x-if="c === 'run_dir' && t.run_dir"><a :href="'#/run?path=' + opt.path + '/' + t.run_dir">открыть</a></template>
+            <template x-if="c !== 'run_dir'"><span x-text="c === 'feasible' ? (t[c] ? '✓' : '✗') : fmt(t[c])"></span></template></td></template></tr></template></tbody></table></div>
+    </div>
+    <div x-show="optTab === 'геометрия лучшей'">
+      <div class="grid g2">
+        <div class="card"><h2>Решётка лучшей конфигурации</h2><div class="svgbox big" x-ref="optlattice"></div><div class="small muted" x-text="optGeoInfo"></div></div>
+        <div><div class="card"><h2>Сота</h2><div class="svgbox" x-html="optGeo.cell"></div></div>
+          <div class="card" style="margin-top:14px"><h2>Разрез</h2><div class="svgbox" x-html="optGeo.stack"></div></div>
+          <div class="card" style="margin-top:14px"><h2>best.yaml</h2><pre x-text="opt.best_yaml"></pre></div></div>
+      </div>
+    </div>
+    <div x-show="optTab === 'отчёт'" class="card md" x-html="renderMd(opt.report, opt.path + '/report.md')"></div>
+  </div>
+  </template>
+</section>
+
+<!-- ======================== jobs ======================== -->
+<section x-show="route.view === 'jobs'">
+  <div class="topbar"><h1>Задачи</h1></div>
+  <div class="card"><table class="t"><thead><tr><th>статус</th><th>задача</th><th>создана</th><th>результат</th><th></th></tr></thead><tbody>
+    <template x-for="j in jobs" :key="j.id"><tr>
+      <td><span :class="'badge ' + jobBadge(j.status)" x-text="j.status"></span></td>
+      <td><a :href="'#/job?id=' + j.id" x-text="j.title"></a></td><td class="small muted" x-text="j.created.replace('T', ' ')"></td>
+      <td class="small"><a x-show="j.result" :href="resultLink(j)" x-text="j.result"></a></td>
+      <td><button class="btn sm warn" x-show="['queued','running'].includes(j.status)" @click="cancel(j.id)">стоп</button></td></tr></template></tbody></table>
+    <div class="empty" x-show="!jobs.length">Пусто</div></div>
+</section>
+
+<section x-show="route.view === 'job'">
+  <template x-if="job">
+  <div>
+    <div class="topbar"><h1 x-text="job.title"></h1><span :class="'badge ' + jobBadge(job.status)" x-text="job.status"></span><div class="spacer"></div>
+      <button class="btn warn" x-show="['queued','running'].includes(job.status)" @click="cancel(job.id)">Остановить</button>
+      <a class="btn primary" x-show="job.result && job.status === 'done'" :href="resultLink(job)">Открыть результат →</a></div>
+    <div class="small muted" style="margin:-10px 0 10px"><code x-text="'srdet ' + job.args.join(' ')"></code></div>
+    <pre class="log" x-ref="joblog" x-text="job.log_tail"></pre>
+  </div>
+  </template>
+</section>
+
+<!-- ======================== docs ======================== -->
+<section x-show="route.view === 'docs'">
+  <div class="split" style="grid-template-columns: 220px 1fr">
+    <div class="card sticky"><h2>Документация</h2>
+      <template x-for="d in docs"><div style="padding:4px 0"><a :href="'#/docs?path=' + d.path" :style="route.params.path === d.path ? 'font-weight:700' : ''" x-text="d.title"></a></div></template>
+      <h3>Архивы результатов</h3>
+      <template x-for="a in archives"><div class="small" style="padding:2px 0"><a :href="'/files/' + a.path" x-text="a.name"></a> <span class="muted" x-text="a.size_MB + ' МБ'"></span></div></template>
+    </div>
+    <div class="card md" x-html="docHtml"></div>
+  </div>
+</section>
+
+</main>
+
+<div class="lightbox" x-show="lightbox" @click="lightbox = null" x-transition.opacity><img :src="lightbox"></div>
+<div class="modal" x-show="modal" @click.self="modal = null"><div class="card"><div class="row"><h2 x-text="modal && modal.title"></h2><button class="btn sm right" @click="modal = null">✕</button></div><pre x-text="modal && modal.text"></pre></div></div>
+<div x-show="toast" x-transition style="position:fixed;bottom:18px;right:18px;z-index:60" class="card" x-html="toast"></div>
+</div>
+</body>
+</html>

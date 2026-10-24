@@ -1,0 +1,17 @@
+name: U07_pitch
+title: "U7 - wall thickness: detection efficiency and cross-talk (7-cell cluster)"
+description: >
+  D = 200 um fixed, the pitch is increased (thicker glass walls). Uniform 60 keV beam over the
+  central cell. Thicker walls lower the scintillator fill factor but stop secondary electrons
+  and fluorescence X-rays from leaking into the neighbours. Bare channels (none) are compared
+  with Al-coated ones for optical cross-talk.
+base: cluster7_xray.yaml
+scan:
+  optics.coating: [none, Al]
+  geometry.pitch: [206 um, 210 um, 220 um, 240 um, 280 um]
+x: geometry.pitch
+series: optics.coating
+quick: {run.events: 50}
+metrics: [detection_efficiency, em_crosstalk, optical_crosstalk, det_yield_per_keV, geometry_fill_factor, psf_r50_um, psf_in_cell_fraction]
+labels: {psf_r50_um: "Light spread r50 [um]", psf_in_cell_fraction: "Light inside own cell", detection_efficiency: "Events with core deposit", em_crosstalk: "Energy outside the hit cell", optical_crosstalk: "Detected light from other cells", det_yield_per_keV: "pe/keV"}
+xlabel: "Pitch [mm] (D = 0.2 mm)"

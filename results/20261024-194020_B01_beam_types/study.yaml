@@ -1,0 +1,29 @@
+name: B01_beam_types
+title: B1 - beam geometries on the full detector (60 keV)
+description: 'Pencil, uniform parallel (r = 10 mm), Gaussian (sigma = 1 mm), divergent
+  cone (5 deg from 100 mm) and an isotropic point source 100 mm in front of the window.
+
+  '
+base: full.yaml
+scan:
+  beam.type:
+  - pencil
+  - parallel
+  - gauss
+  - divergent
+  - isotropic
+quick:
+  run.events: 30
+metrics:
+- interacting_fraction
+- detection_efficiency
+- photopeak_fraction
+- mean_cells_hit
+- det_yield_per_keV
+labels:
+  interacting_fraction: Interacting primaries
+  detection_efficiency: Events with core deposit
+  photopeak_fraction: Full-energy fraction
+  mean_cells_hit: Cells hit
+  det_yield_per_keV: pe/keV
+xlabel: Beam type

@@ -1,0 +1,35 @@
+name: U04b_diameter
+title: U4b - light collection vs channel diameter D (wall 8 um kept constant)
+description: 'D and pitch are scanned together (zip) so that the wall thickness stays
+  at 8 um - 2 x 2 um coating.
+
+  '
+base: unit_optical.yaml
+mode: zip
+scan:
+  geometry.channel_diameter:
+  - 25 um
+  - 50 um
+  - 100 um
+  - 200 um
+  - 400 um
+  geometry.pitch:
+  - 33 um
+  - 58 um
+  - 108 um
+  - 208 um
+  - 408 um
+x: geometry.channel_diameter
+logx: true
+quick:
+  run.events: 10
+  beam.optical.n: 100
+metrics:
+- lce
+- mean_refl_det
+- geometry_fill_factor
+labels:
+  lce: Light collection efficiency
+  mean_refl_det: Mean reflections (detected)
+  geometry_fill_factor: Core area fraction
+xlabel: Channel diameter D [mm]

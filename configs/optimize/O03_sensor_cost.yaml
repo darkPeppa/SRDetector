@@ -1,0 +1,28 @@
+name: O03_sensor_cost
+title: "O3 - photodetector and its window: signal per cost under a resolution requirement"
+description: >
+  Ag-coated 2 mm channels. Free: sensor technology and the thickness of the sensor entrance window
+  (light spreads inside a thick window). Objective: photo-electrons per keV per unit relative
+  sensor cost; requirement: spatial spread r50 <= 150 um.
+base: full.yaml
+set:
+  beam.energy: 60 keV
+  geometry.length: 2 mm
+  optics.coating: Ag
+space:
+  sensor: {path: geometry.sensor, values: [aSi_FPD, CMOS_FSI, sCMOS_BSI, EMCCD, SiPM]}
+  window: {path: geometry.sensor_window_thickness, low: 0.0 mm, high: 1.0 mm}
+objective: {expr: "det_yield_per_cost", direction: maximize}
+constraints:
+  - "psf_r50_um <= 150"
+pareto: {x: psf_r50_um, x_dir: min, y: det_yield_per_keV, y_dir: max}
+report_metrics: [det_yield_per_keV, det_yield_per_cost, psf_r50_um, psf_in_cell_fraction, snr_60keV_per_channel]
+search:
+  sampler: lhs
+  initial: 20
+  events: [400, 1600]
+  eta: 3
+  refine: {iterations: 3, events: 1600, step: 0.15, min_gain: 0.03}
+  final: {top: 3, events: 4000, repeats: 3}
+  seed: 3
+quick: {initial: 5, events: [60], refine: null, final: {top: 1, events: 150, repeats: 2}}

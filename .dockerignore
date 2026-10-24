@@ -1,0 +1,9 @@
+.git
+runs
+results
+legacy
+build
+**/__pycache__
+**/*.root
+docs
+docker/g4data

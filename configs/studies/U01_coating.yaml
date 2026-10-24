@@ -1,0 +1,22 @@
+name: U01_coating
+title: "U1 - light collection vs channel coating (single channel, optical gun)"
+description: >
+  One hexagonal cell, CsI(Tl) core D = 200 um, L = 30 mm, ideal sensor. Optical photons with the
+  CsI(Tl) spectrum are emitted isotropically and uniformly inside the core, so only the light
+  transport is tested: the coating model, its reflectivity and angular behaviour.
+  For bare / thin-film channels part of the light leaves the core and is guided inside the glass
+  wall to the sensor; `optical_crosstalk` shows that share - in the full detector it ends up in
+  neighbouring pixels (see U07 / U08).
+base: unit_optical.yaml
+scan:
+  optics.coating: [none, air_gap, MgF2_film, black, ideal, Al, Al_simple, Ag, Au, TiO2, BaSO4, Teflon,
+                   ESR_LUT, Teflon_LUT, ESR_LUT_BGO, Tyvek_LUT, TiO2_LUT]
+quick: {run.events: 10, beam.optical.n: 100}
+metrics: [lce, lce_exit, coat_abs_prob, mean_refl_det, t_det_median_ns, optical_crosstalk]
+labels:
+  lce: "Light collection efficiency (ideal sensor)"
+  lce_exit: "Fraction leaving the channel to the sensor"
+  coat_abs_prob: "Absorption probability per coating hit"
+  mean_refl_det: "Mean reflections of detected photons"
+  t_det_median_ns: "Median arrival time [ns]"
+xlabel: "Coating"

@@ -1,0 +1,22 @@
+name: U10_energy
+title: "U10 - energy dependence of interactions in the full detector (EM only)"
+description: >
+  Full detector, optical physics off (fast). Pencil beam on the central channel. Shows the
+  first-interaction process mix (photoelectric / Compton / Rayleigh / pair) versus the beam
+  energy, the K edges of I (33.2 keV) and Cs (36.0 keV), the photopeak and K-escape fractions
+  and the lateral energy spread (cells hit).
+base: full.yaml
+set:
+  beam.type: pencil
+  physics.optical: {scintillation: false, cerenkov: false}
+  run.cell_hits: false
+scan:
+  beam.energy: [10 keV, 20 keV, 30 keV, 33 keV, 34 keV, 36 keV, 40 keV, 50 keV, 60 keV, 80 keV, 100 keV,
+                150 keV, 200 keV, 300 keV, 500 keV, 662 keV, 1000 keV, 2000 keV, 5000 keV]
+logx: true
+process_fractions: true
+process_counts: true
+quick: {run.events: 50}
+metrics: [interacting_fraction, photopeak_fraction, k_escape_fraction, em_crosstalk, mean_cells_hit, core_energy_fraction]
+labels: {interacting_fraction: "Interaction probability", photopeak_fraction: "Full-energy fraction", k_escape_fraction: "K-escape probability", em_crosstalk: "Energy outside the first cell", mean_cells_hit: "Cells hit", core_energy_fraction: "Energy fraction in cores"}
+xlabel: "Beam energy [keV]"

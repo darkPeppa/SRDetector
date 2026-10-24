@@ -1,0 +1,33 @@
+name: O01_geometry_60keV
+title: "O1 - channel geometry and coating for 60 keV imaging (full detector)"
+description: >
+  Free: channel length L, core diameter D, glass wall thickness and coating. The pitch follows
+  from D + 2 x coating (2 um) + wall, so every candidate is a valid honeycomb. Objective: detected
+  photo-electrons per incident keV (light yield x detection efficiency). Requirements: spatial
+  spread r50 <= 120 um, energy shared with other cells <= 25 %, detection efficiency >= 0.8.
+base: full.yaml
+set:
+  beam.energy: 60 keV
+space:
+  L:    {path: geometry.length, low: 0.5 mm, high: 5 mm, log: true}
+  D:    {path: geometry.channel_diameter, low: 100 um, high: 400 um, log: true}
+  wall: {low: 2 um, high: 40 um}
+  coat: {path: optics.coating, values: [Al, Ag, ESR_LUT]}
+derived:
+  geometry.pitch: {expr: "D + 2*0.002 + wall", unit: mm}
+objective: {expr: "det_yield_per_keV * detection_efficiency", direction: maximize}
+constraints:
+  - "psf_r50_um <= 120"
+  - "em_crosstalk <= 0.25"
+  - "detection_efficiency >= 0.8"
+pareto: {x: psf_r50_um, x_dir: min, y: det_yield_per_keV, y_dir: max}
+report_metrics: [det_yield_per_keV, detection_efficiency, psf_r50_um, em_crosstalk, photopeak_fraction, n_cells]
+search:
+  sampler: lhs
+  initial: 24
+  events: [300, 900, 2700]
+  eta: 3
+  refine: {iterations: 4, events: 2700, step: 0.15, min_gain: 0.03}
+  final: {top: 3, events: 5000, repeats: 3}
+  seed: 1
+quick: {initial: 6, events: [60, 180], refine: null, final: {top: 1, events: 200, repeats: 2}}

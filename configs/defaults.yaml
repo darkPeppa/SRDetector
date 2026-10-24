@@ -1,0 +1,97 @@
+# SRDetector - default configuration. Every key that a config can set is listed here.
+# Other configs start with `extends: <file>` and override only what differs.
+# Quantities carry units ("200 um", "60 keV", "5 deg"); bare numbers are mm / keV / deg.
+name: defaults
+description: Full cylindrical honeycomb detector, CsI(Tl) channels with Al coating (legacy dimensions).
+
+geometry:
+  mode: full                  # full | cluster7 | unit | slab
+  detector_radius: 11 mm      # honeycomb matrix radius
+  length: 30 mm               # channel length (beam axis z)
+  pitch: 208 um               # hex cell flat-to-flat = centre distance
+  channel_diameter: 200 um    # scintillator core diameter
+  channel_shape: circle       # circle | hex
+  wall_material: LeadGlass_MCP
+  matrix_material: ""         # rim outside the lattice; "" = wall material
+  core_material: CsI_Tl
+  coating_thickness: 2 um     # physical coating layer (EM); 0 = optical surface only
+  coating_material: ""        # "" = default of the coating type
+  world_material: Air
+  housing_material: G4_Al
+  housing_thickness: 1 mm     # 0 = no housing (always none in unit / cluster7 mode)
+  window_material: G4_Be
+  window_thickness: 0.5 mm
+  coupling_material: OpticalGrease
+  coupling_thickness: 50 um
+  sensor: aSi_FPD             # ideal | aSi_FPD | CMOS_FSI | sCMOS_BSI | SiPM | PMT_bialkali | EMCCD
+  sensor_window_thickness: -1 mm   # < 0: catalogue value
+  sensor_active_thickness: 20 um
+  slab_material: CsI_Tl       # slab mode only
+  slab_thickness: 1 mm
+  slab_half_xy: 50 mm
+  world_margin: 50 mm
+  check_overlaps: false
+
+optics:
+  coating: Al                 # see `srdet catalog coatings`
+  coating_reflectivity: 0.90  # for mirror / diffuse
+  coating_sigma_alpha: 0 deg  # > 0: rough (ground) metal surface
+  film_thickness: 0.5 um      # MgF2_film
+  entrance_coating: Al        # reflector on the entrance window ("none" to disable)
+
+materials:
+  yield_scale: 1.0            # scale ALL scintillation yields (speed); results are rescaled
+  overrides: []               # raw /srdet/mat/... commands, e.g. "setAbsLength CsI_Tl 20 cm"
+
+physics:
+  em: livermore               # livermore | option4 | penelope | standard | option3
+  radioactive: false          # G4RadioactiveDecayPhysics (ion sources)
+  fluo: true
+  auger: true
+  pixe: false
+  deexcitation_ignore_cut: true
+  low_edge: 250 eV            # lowest production threshold
+  cut_world: 0.1 mm           # range cut outside the detector region
+  cut_detector: 1 um          # range cut in the detector region
+  optical:
+    scintillation: true
+    cerenkov: true
+    absorption: true
+    rayleigh: true
+    mie: false
+    boundary: true
+    wls: false
+    cerenkov_max_photons: 100
+    cerenkov_max_beta_change: 10
+    track_secondaries_first: true
+    finite_rise_time: false
+
+beam:
+  type: pencil                # pencil | parallel | gauss | divergent | isotropic | optical | macro
+  particle: gamma
+  energy: 60 keV              # mono energy (ignored if spectrum is set)
+  spectrum: null              # {lines: [[E, w], ...]} | {source: Am241} | {xray_tube: {kvp: 80, filter: 2.5 mm}} | {file: x.csv}
+  position: [0 mm, 0 mm]      # beam centre in x, y
+  radius: 5 mm                # parallel
+  sigma: 1 mm                 # gauss
+  half_angle: 5 deg           # divergent (cone half angle)
+  distance: 100 mm            # divergent / isotropic: source distance in front of the window
+  optical:                    # type: optical (photons generated inside the central core)
+    n: 1000
+    energy: 0 eV              # 0 = emission spectrum of the core
+    z: 0 mm
+    z_uniform: true
+    r_uniform: true
+    theta: -1 deg             # < 0 isotropic, else fixed polar angle to +z
+  macro: null                 # type: macro -> include this /gps macro verbatim
+
+run:
+  events: 1000
+  threads: 0                  # 0 = all cores
+  seed: 12345
+  photon_fraction: 0.0        # stored fraction of detected photons (ntuple 'photons')
+  cell_hits: false
+  gdml: false
+  histograms: auto            # auto ranges from beam energy and geometry
+  extra_commands: []          # appended before /run/beamOn
+  post_commands: []           # appended after /run/beamOn

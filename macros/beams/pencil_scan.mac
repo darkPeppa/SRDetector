@@ -1,0 +1,8 @@
+# Example: pencil beam stepping across the central row of cells (edge-spread / MTF scans):
+# use with /control/loop macros/beams/pencil_scan.mac x -0.5 0.5 0.05 (x in mm)
+/gps/particle gamma
+/gps/pos/type Point
+/gps/pos/centre {x} 0 -16 mm
+/gps/direction 0 0 1
+/gps/ene/mono 60 keV
+/run/beamOn 200

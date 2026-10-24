@@ -1,0 +1,12 @@
+# One cell, X-ray pencil beam along the channel axis.
+extends: ../defaults.yaml
+name: unit_xray
+geometry:
+  mode: unit
+beam:
+  type: pencil
+  energy: 60 keV
+materials:
+  yield_scale: 0.2
+run:
+  events: 2000

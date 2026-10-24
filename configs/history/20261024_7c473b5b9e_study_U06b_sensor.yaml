@@ -1,0 +1,124 @@
+name: study_U06b_sensor
+description: Full cylindrical honeycomb detector, CsI(Tl) channels with Al coating
+  (legacy dimensions).
+geometry:
+  mode: unit
+  detector_radius: 11 mm
+  length: 30 mm
+  pitch: 208 um
+  channel_diameter: 200 um
+  channel_shape: circle
+  wall_material: LeadGlass_MCP
+  matrix_material: ''
+  core_material: CsI_Tl
+  coating_thickness: 2 um
+  coating_material: ''
+  world_material: Air
+  housing_material: G4_Al
+  housing_thickness: 1 mm
+  window_material: G4_Be
+  window_thickness: 0.5 mm
+  coupling_material: OpticalGrease
+  coupling_thickness: 50 um
+  sensor: aSi_FPD
+  sensor_window_thickness: -1 mm
+  sensor_active_thickness: 20 um
+  slab_material: CsI_Tl
+  slab_thickness: 1 mm
+  slab_half_xy: 50 mm
+  world_margin: 50 mm
+  check_overlaps: false
+optics:
+  coating: Al
+  coating_reflectivity: 0.9
+  coating_sigma_alpha: 0 deg
+  film_thickness: 0.5 um
+  entrance_coating: Al
+materials:
+  yield_scale: 0.2
+  overrides: []
+physics:
+  em: livermore
+  radioactive: false
+  fluo: true
+  auger: true
+  pixe: false
+  deexcitation_ignore_cut: true
+  low_edge: 250 eV
+  cut_world: 0.1 mm
+  cut_detector: 1 um
+  optical:
+    scintillation: true
+    cerenkov: true
+    absorption: true
+    rayleigh: true
+    mie: false
+    boundary: true
+    wls: false
+    cerenkov_max_photons: 100
+    cerenkov_max_beta_change: 10
+    track_secondaries_first: true
+    finite_rise_time: false
+beam:
+  type: pencil
+  particle: gamma
+  energy: 60 keV
+  spectrum: null
+  position:
+  - 0 mm
+  - 0 mm
+  radius: 5 mm
+  sigma: 1 mm
+  half_angle: 5 deg
+  distance: 100 mm
+  optical:
+    n: 1000
+    energy: 0 eV
+    z: 0 mm
+    z_uniform: true
+    r_uniform: true
+    theta: -1 deg
+  macro: null
+run:
+  events: 2000
+  threads: 0
+  seed: 12345
+  photon_fraction: 0.0
+  cell_hits: false
+  gdml: false
+  histograms: auto
+  extra_commands: []
+  post_commands: []
+study:
+  name: U06b_sensor
+  title: 'U6b - photodetector technology: signal, noise and cost'
+  description: '60 keV X-rays in one CsI(Tl) channel read by different photodetectors.
+    QE(lambda) x fill factor is applied on the sensor surface; read noise, pixel pitch
+    and relative cost come from the catalogue (typical data-sheet values). Figures
+    of merit: detected photo-electrons per keV, SNR for a 60 keV photon in one channel,
+    and photo-electrons per keV per unit cost.
+
+    '
+  base: unit_xray.yaml
+  scan:
+    geometry.sensor:
+    - ideal
+    - aSi_FPD
+    - CMOS_FSI
+    - sCMOS_BSI
+    - SiPM
+    - PMT_bialkali
+    - EMCCD
+  quick:
+    run.events: 50
+  metrics:
+  - det_yield_per_keV
+  - snr_60keV_per_channel
+  - det_yield_per_cost
+  - lce
+  labels:
+    det_yield_per_keV: Photo-electrons per keV
+    snr_60keV_per_channel: SNR at 60 keV (1 channel)
+    det_yield_per_cost: pe/keV per relative cost
+    lce: LCE incl. QE
+  xlabel: Sensor

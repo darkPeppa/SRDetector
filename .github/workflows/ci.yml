@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "refactor/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python layer (no Geant4)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r python/requirements.txt && pip install -e python
+      - run: pytest -q tests/test_python.py tests/test_optimize.py tests/test_web.py
+
+  geant4:
+    name: Build image + physics sanity tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    needs: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # The Geant4 layer takes ~1 h to build on a 4-core runner; it is cached between runs.
+      - name: Build srdet image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: srdet
+          tags: srdet:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Physics sanity tests (quick statistics)
+        run: |
+          docker run --rm -e SRDET_QUICK=1 -e SRDET_KEEP_TEST_RUNS=1 -v "$PWD":/work srdet:ci \
+            pytest -v -x /work/tests --junitxml=/work/test-results.xml
+      - name: Quick study smoke test
+        run: docker run --rm -v "$PWD":/work srdet:ci study U02_reflectivity --quick
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            test-results.xml
+            runs/studies/**/report.md
+            runs/studies/**/plots/*.png

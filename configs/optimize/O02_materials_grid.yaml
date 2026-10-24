@@ -1,0 +1,27 @@
+name: O02_materials_grid
+title: "O2 - scintillator x coating x wall glass (full grid, L = 2 mm, 60 keV)"
+description: >
+  All 32 combinations of four scintillators, four coatings and two wall glasses on the full
+  detector with 2 mm channels. Objective: light in the full-energy peak (pe/keV x photopeak
+  fraction), i.e. spectroscopic quality. The Pareto front trades light against speed
+  (median photon arrival time).
+base: full.yaml
+set:
+  beam.energy: 60 keV
+  geometry.length: 2 mm
+space:
+  core: {path: geometry.core_material, values: [CsI_Tl, GAGG, NaI_Tl, LYSO]}
+  coat: {path: optics.coating, values: [Al, Ag, ESR_LUT, TiO2]}
+  wall: {path: geometry.wall_material, values: [LeadGlass_MCP, Borosilicate]}
+objective: {expr: "det_yield_per_keV * photopeak_fraction", direction: maximize}
+constraints:
+  - "em_crosstalk <= 0.3"
+pareto: {x: t_det_median_ns, x_dir: min, y: det_yield_per_keV, y_dir: max}
+report_metrics: [det_yield_per_keV, photopeak_fraction, k_escape_fraction, t_det_median_ns, em_crosstalk]
+search:
+  sampler: grid
+  events: [400, 1600]
+  eta: 4
+  final: {top: 3, events: 4000, repeats: 3}
+  seed: 2
+quick: {events: [40], final: {top: 1, events: 100, repeats: 2}}

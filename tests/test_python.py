@@ -1,0 +1,98 @@
+"""Fast tests of the Python layer (no Geant4 needed)."""
+from __future__ import annotations
+
+import re
+
+import numpy as np
+import pytest
+
+from conftest import ROOT
+from srdet import catalog, config as C, macro, spectra, studies
+
+
+def test_quantities():
+    assert C.quantity("200 um", "length") == pytest.approx(0.2)
+    assert C.quantity("1.5 cm", "length") == pytest.approx(15)
+    assert C.quantity("0.662 MeV", "energy") == pytest.approx(662)
+    assert C.quantity(3, "length") == 3
+    assert C.g4("2 um", "length") == "0.002 mm"
+    with pytest.raises(ValueError):
+        C.quantity("3 parsec", "length")
+
+
+def test_overrides_merge():
+    cfg = C.load("unit_optical.yaml")
+    C.set_path(cfg, "physics.optical", {"scintillation": False})
+    assert cfg["physics"]["optical"]["scintillation"] is False
+    assert "boundary" in cfg["physics"]["optical"]  # partial update keeps other keys
+    cfg = C.apply_sets(cfg, ["geometry.length=5 mm", "run.events=7"])
+    assert cfg["geometry"]["length"] == "5 mm" and cfg["run"]["events"] == 7
+
+
+@pytest.mark.parametrize("name", ["full", "legacy_like", "unit_optical", "unit_xray", "cluster7_xray", "slab_csi"])
+def test_macro_order(name, tmp_path):
+    text = macro.render(C.load(name), tmp_path)
+    lines = text.splitlines()
+    init = lines.index("/run/initialize")
+    region = [i for i, l in enumerate(lines) if l.startswith("/run/setCutForRegion")]
+    geom = [i for i, l in enumerate(lines) if l.startswith("/srdet/geom/")]
+    assert max(geom) < init < region[0] < lines.index(lines[-1])
+    assert lines[-1].startswith("/run/beamOn")
+    assert not any('""' in l for l in lines)
+
+
+def test_divergent_beam_points_to_detector(tmp_path):
+    cfg = C.load("full")
+    cfg["beam"]["type"] = "divergent"
+    cmds = macro.beam_cmds(cfg)
+    assert "/gps/ang/maxtheta 180 deg" in cmds  # GPS iso: theta = 180 deg is +z
+
+
+def test_line_spectrum_histogram():
+    cfg = C.load("full")
+    cfg["beam"]["spectrum"] = {"source": "Am241"}
+    pts = [l for l in macro.beam_cmds(cfg) if l.startswith("/gps/hist/point")]
+    e = np.array([float(l.split()[1]) for l in pts])
+    assert np.all(np.diff(e) > 0), "GPS histogram edges must increase"
+    assert e.max() == pytest.approx(0.05956, abs=1e-4)  # MeV
+
+
+def test_xray_tube_spectrum():
+    e, w = spectra.xray_tube(80, 2.5)
+    assert e.max() < 80 and w.sum() == pytest.approx(1)
+    # filtration hardens the spectrum: mean energy grows with filter thickness
+    e2, w2 = spectra.xray_tube(80, 10)
+    assert (e2 * w2).sum() > (e * w).sum()
+
+
+def test_xcom_k_edge():
+    # CsI: iodine K edge at 33.17 keV, total attenuation jumps by ~3
+    lo = spectra.mu_rho("CsI", np.array([33.0]))[0]
+    hi = spectra.mu_rho("CsI", np.array([33.4]))[0]
+    assert 2.5 < hi / lo < 3.5
+
+
+def test_catalog_matches_cpp():
+    src = (ROOT / "app/src/OpticalSurfaces.cc").read_text()
+    cpp = set(re.findall(r'\{"(\w+)", \{"\1",', src))
+    assert cpp == set(catalog.COATINGS), cpp ^ set(catalog.COATINGS)
+    src = (ROOT / "app/src/Sensors.cc").read_text()
+    cpp = set(re.findall(r'\{"(\w+)",\s*\{"\1"', src))
+    assert cpp == set(catalog.SENSORS), cpp ^ set(catalog.SENSORS)
+    src = (ROOT / "app/src/Materials.cc").read_text()
+    for name in list(catalog.SCINTILLATORS) + catalog.GLASSES + catalog.OTHER_MATERIALS:
+        assert f'{{"{name}",' in src, name
+
+
+def test_all_studies_expand():
+    for name in studies.study_files():
+        s = studies.load_study(name)
+        pts = studies.points(s)
+        assert pts, name
+        cfg = C.load(s["base"])
+        for p in pts[:2]:
+            c = C.deep_merge(cfg, {})
+            for k, v in p.items():
+                if k != "variant":
+                    C.set_path(c, k, v)
+            macro.render(c, ROOT / "runs" / "dummy")

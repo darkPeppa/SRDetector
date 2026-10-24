@@ -1,0 +1,13 @@
+name: U09_core_material
+title: "U9 - scintillator in the channels"
+description: >
+  Same geometry, different scintillators (yield, density, refractive index, emission band).
+  60 keV pencil beam into one channel read by an a-Si flat panel.
+base: unit_xray.yaml
+set: {materials.yield_scale: 0.1}
+scan:
+  geometry.core_material: [CsI_Tl, NaI_Tl, LYSO, BGO, GAGG, EJ200, CsI_pure]
+quick: {run.events: 50}
+metrics: [det_yield_per_keV, photopeak_fraction, k_escape_fraction, lce, t_det_median_ns]
+labels: {det_yield_per_keV: "pe/keV (a-Si panel)", photopeak_fraction: "Photopeak fraction", k_escape_fraction: "K-escape probability", lce: "LCE incl. QE", t_det_median_ns: "Median arrival time [ns]"}
+xlabel: "Core scintillator"

@@ -1,0 +1,13 @@
+name: B02_sources
+title: "B2 - radioactive sources and X-ray tube spectra on the full detector"
+description: >
+  Parallel beam (r = 10 mm) with the photon spectrum of Am-241, Co-57, Cs-137 and a W-anode tube
+  at 80 and 120 kVp (2.5 mm Al filtration, approximate Kramers model).
+base: full.yaml
+scan:
+  beam.spectrum: [{source: Am241}, {source: Co57}, {source: Cs137}, {xray_tube: {kvp: 80}}, {xray_tube: {kvp: 120}}]
+x_names: [Am-241, Co-57, Cs-137, "W 80 kVp", "W 120 kVp"]
+quick: {run.events: 30}
+metrics: [mean_edep_core_keV, detection_efficiency, k_escape_fraction, mean_n_det, mean_cells_hit]
+labels: {mean_edep_core_keV: "Mean core deposit [keV]", detection_efficiency: "Events with core deposit", mean_n_det: "Mean detected photons", mean_cells_hit: "Cells hit"}
+xlabel: "Source"

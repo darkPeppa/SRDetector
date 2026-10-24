@@ -1,0 +1,148 @@
+name: study_U10_energy
+description: Full detector, R = 11 mm, L = 30 mm, 9367 hexagonal cells, CsI(Tl) cores,
+  Al coating, a-Si panel.
+geometry:
+  mode: full
+  detector_radius: 11 mm
+  length: 30 mm
+  pitch: 208 um
+  channel_diameter: 200 um
+  channel_shape: circle
+  wall_material: LeadGlass_MCP
+  matrix_material: ''
+  core_material: CsI_Tl
+  coating_thickness: 2 um
+  coating_material: ''
+  world_material: Air
+  housing_material: G4_Al
+  housing_thickness: 1 mm
+  window_material: G4_Be
+  window_thickness: 0.5 mm
+  coupling_material: OpticalGrease
+  coupling_thickness: 50 um
+  sensor: aSi_FPD
+  sensor_window_thickness: -1 mm
+  sensor_active_thickness: 20 um
+  slab_material: CsI_Tl
+  slab_thickness: 1 mm
+  slab_half_xy: 50 mm
+  world_margin: 50 mm
+  check_overlaps: false
+optics:
+  coating: Al
+  coating_reflectivity: 0.9
+  coating_sigma_alpha: 0 deg
+  film_thickness: 0.5 um
+  entrance_coating: Al
+materials:
+  yield_scale: 0.05
+  overrides: []
+physics:
+  em: livermore
+  radioactive: false
+  fluo: true
+  auger: true
+  pixe: false
+  deexcitation_ignore_cut: true
+  low_edge: 250 eV
+  cut_world: 0.1 mm
+  cut_detector: 1 um
+  optical:
+    scintillation: false
+    cerenkov: false
+    absorption: true
+    rayleigh: true
+    mie: false
+    boundary: true
+    wls: false
+    cerenkov_max_photons: 100
+    cerenkov_max_beta_change: 10
+    track_secondaries_first: true
+    finite_rise_time: false
+beam:
+  type: pencil
+  particle: gamma
+  energy: 60 keV
+  spectrum: null
+  position:
+  - 0 mm
+  - 0 mm
+  radius: 10 mm
+  sigma: 1 mm
+  half_angle: 5 deg
+  distance: 100 mm
+  optical:
+    n: 1000
+    energy: 0 eV
+    z: 0 mm
+    z_uniform: true
+    r_uniform: true
+    theta: -1 deg
+  macro: null
+run:
+  events: 2000
+  threads: 0
+  seed: 12345
+  photon_fraction: 0.2
+  cell_hits: false
+  gdml: false
+  histograms: auto
+  extra_commands: []
+  post_commands: []
+study:
+  name: U10_energy
+  title: U10 - energy dependence of interactions in the full detector (EM only)
+  description: 'Full detector, optical physics off (fast). Pencil beam on the central
+    channel. Shows the first-interaction process mix (photoelectric / Compton / Rayleigh
+    / pair) versus the beam energy, the K edges of I (33.2 keV) and Cs (36.0 keV),
+    the photopeak and K-escape fractions and the lateral energy spread (cells hit).
+
+    '
+  base: full.yaml
+  set:
+    beam.type: pencil
+    physics.optical:
+      scintillation: false
+      cerenkov: false
+    run.cell_hits: false
+  scan:
+    beam.energy:
+    - 10 keV
+    - 20 keV
+    - 30 keV
+    - 33 keV
+    - 34 keV
+    - 36 keV
+    - 40 keV
+    - 50 keV
+    - 60 keV
+    - 80 keV
+    - 100 keV
+    - 150 keV
+    - 200 keV
+    - 300 keV
+    - 500 keV
+    - 662 keV
+    - 1000 keV
+    - 2000 keV
+    - 5000 keV
+  logx: true
+  process_fractions: true
+  process_counts: true
+  quick:
+    run.events: 50
+  metrics:
+  - interacting_fraction
+  - photopeak_fraction
+  - k_escape_fraction
+  - em_crosstalk
+  - mean_cells_hit
+  - core_energy_fraction
+  labels:
+    interacting_fraction: Interaction probability
+    photopeak_fraction: Full-energy fraction
+    k_escape_fraction: K-escape probability
+    em_crosstalk: Energy outside the first cell
+    mean_cells_hit: Cells hit
+    core_energy_fraction: Energy fraction in cores
+  xlabel: Beam energy [keV]

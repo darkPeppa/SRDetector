@@ -1,0 +1,32 @@
+name: U04_length
+title: U4a - light collection vs channel length L
+description: 'Aspect ratio L/D at fixed D = 200 um. Longer channels absorb more X-rays
+  but need more reflections: N ~ L / (D tan(theta)).
+
+  '
+base: unit_optical.yaml
+scan:
+  optics.coating:
+  - Al
+  - Ag
+  - ESR_LUT
+  geometry.length:
+  - 1 mm
+  - 2 mm
+  - 5 mm
+  - 10 mm
+  - 20 mm
+  - 30 mm
+x: geometry.length
+series: optics.coating
+logx: true
+quick:
+  run.events: 10
+  beam.optical.n: 100
+metrics:
+- lce
+- mean_refl_det
+labels:
+  lce: Light collection efficiency
+  mean_refl_det: Mean reflections (detected)
+xlabel: Channel length L [mm]
