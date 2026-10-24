@@ -1,0 +1,128 @@
+name: study_U03_emission_depth
+description: Full cylindrical honeycomb detector, CsI(Tl) channels with Al coating
+  (legacy dimensions).
+geometry:
+  mode: unit
+  detector_radius: 11 mm
+  length: 30 mm
+  pitch: 208 um
+  channel_diameter: 200 um
+  channel_shape: circle
+  wall_material: LeadGlass_MCP
+  matrix_material: ''
+  core_material: CsI_Tl
+  coating_thickness: 2 um
+  coating_material: ''
+  world_material: Air
+  housing_material: G4_Al
+  housing_thickness: 1 mm
+  window_material: G4_Be
+  window_thickness: 0.5 mm
+  coupling_material: OpticalGrease
+  coupling_thickness: 50 um
+  sensor: ideal
+  sensor_window_thickness: -1 mm
+  sensor_active_thickness: 20 um
+  slab_material: CsI_Tl
+  slab_thickness: 1 mm
+  slab_half_xy: 50 mm
+  world_margin: 50 mm
+  check_overlaps: false
+optics:
+  coating: Al
+  coating_reflectivity: 0.9
+  coating_sigma_alpha: 0 deg
+  film_thickness: 0.5 um
+  entrance_coating: Al
+materials:
+  yield_scale: 1.0
+  overrides: []
+physics:
+  em: livermore
+  radioactive: false
+  fluo: true
+  auger: true
+  pixe: false
+  deexcitation_ignore_cut: true
+  low_edge: 250 eV
+  cut_world: 0.1 mm
+  cut_detector: 1 um
+  optical:
+    scintillation: true
+    cerenkov: true
+    absorption: true
+    rayleigh: true
+    mie: false
+    boundary: true
+    wls: false
+    cerenkov_max_photons: 100
+    cerenkov_max_beta_change: 10
+    track_secondaries_first: true
+    finite_rise_time: false
+beam:
+  type: optical
+  particle: gamma
+  energy: 60 keV
+  spectrum: null
+  position:
+  - 0 mm
+  - 0 mm
+  radius: 5 mm
+  sigma: 1 mm
+  half_angle: 5 deg
+  distance: 100 mm
+  optical:
+    n: 500
+    energy: 0 eV
+    z: 0 mm
+    z_uniform: false
+    r_uniform: true
+    theta: -1 deg
+  macro: null
+run:
+  events: 200
+  threads: 0
+  seed: 12345
+  photon_fraction: 0.0
+  cell_hits: false
+  gdml: false
+  histograms: auto
+  extra_commands: []
+  post_commands: []
+study:
+  name: U03_emission_depth
+  title: U3 - light collection vs emission depth z (depth-of-interaction effect)
+  description: 'Photons emitted at a fixed depth z (sensor at +z). The LCE(z) slope
+    sets the depth-dependent light non-uniformity, which broadens the energy resolution
+    of thick channels.
+
+    '
+  base: unit_optical.yaml
+  set:
+    beam.optical.z_uniform: false
+  scan:
+    optics.coating:
+    - Al
+    - Ag
+    - ESR_LUT
+    - none
+    beam.optical.z:
+    - -14.5 mm
+    - -10 mm
+    - -5 mm
+    - 0 mm
+    - 5 mm
+    - 10 mm
+    - 14.5 mm
+  x: beam.optical.z
+  series: optics.coating
+  quick:
+    run.events: 10
+    beam.optical.n: 100
+  metrics:
+  - lce
+  - mean_refl_det
+  labels:
+    lce: Light collection efficiency
+    mean_refl_det: Mean reflections (detected)
+  xlabel: Emission depth z [mm] (sensor at +15 mm)

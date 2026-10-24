@@ -1,0 +1,13 @@
+# Full cylindrical honeycomb detector (defaults). X-ray beam over the whole entrance face.
+extends: ../defaults.yaml
+name: full
+description: Full detector, R = 11 mm, L = 30 mm, 9367 hexagonal cells, CsI(Tl) cores, Al coating, a-Si panel.
+beam:
+  type: parallel
+  radius: 10 mm
+  energy: 60 keV
+materials:
+  yield_scale: 0.05          # 5 % of the photons are tracked; numbers are rescaled in the analysis
+run:
+  events: 2000
+  photon_fraction: 0.2       # detected photons stored for the point-spread metric

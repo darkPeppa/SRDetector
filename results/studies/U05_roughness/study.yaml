@@ -1,0 +1,31 @@
+name: U05_roughness
+title: U5 - light collection vs micro-facet roughness sigma_alpha
+description: 'Ground metal surfaces (unified model, pure lobe reflection). Roughness
+  randomises the reflection angle: photons leave TIR-like trajectories and need more
+  bounces.
+
+  '
+base: unit_optical.yaml
+scan:
+  optics.coating:
+  - Al
+  - mirror
+  optics.coating_sigma_alpha:
+  - 0 deg
+  - 1 deg
+  - 3 deg
+  - 6 deg
+  - 12 deg
+  - 25 deg
+x: optics.coating_sigma_alpha
+series: optics.coating
+quick:
+  run.events: 10
+  beam.optical.n: 100
+metrics:
+- lce
+- mean_refl_det
+labels:
+  lce: Light collection efficiency
+  mean_refl_det: Mean reflections (detected)
+xlabel: Facet slope spread sigma_alpha [deg]

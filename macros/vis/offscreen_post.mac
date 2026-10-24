@@ -1,0 +1,16 @@
+# Written after /run/beamOn: 3D view with tracks, entrance-face view of the honeycomb, VRML.
+/vis/viewer/set/viewpointThetaPhi 60 30 deg
+/vis/tsg/offscreen/set/file view3d_tracks.png
+/vis/viewer/rebuild
+/vis/viewer/flush
+# geometry only, looking from the beam side onto the channels
+/vis/drawVolume Matrix
+/vis/viewer/set/viewpointVector 0 0 -1
+/vis/viewer/set/upVector 0 1 0
+/vis/viewer/zoomTo {srdetFrontZoom}
+/vis/tsg/offscreen/set/file front_honeycomb.png
+/vis/viewer/rebuild
+/vis/viewer/flush
+/vis/open VRML2FILE
+/vis/drawVolume
+/vis/viewer/flush

@@ -1,0 +1,16 @@
+name: U03_emission_depth
+title: "U3 - light collection vs emission depth z (depth-of-interaction effect)"
+description: >
+  Photons emitted at a fixed depth z (sensor at +z). The LCE(z) slope sets the depth-dependent
+  light non-uniformity, which broadens the energy resolution of thick channels.
+base: unit_optical.yaml
+set: {beam.optical.z_uniform: false}
+scan:
+  optics.coating: [Al, Ag, ESR_LUT, none]
+  beam.optical.z: [-14.5 mm, -10 mm, -5 mm, 0 mm, 5 mm, 10 mm, 14.5 mm]
+x: beam.optical.z
+series: optics.coating
+quick: {run.events: 10, beam.optical.n: 100}
+metrics: [lce, mean_refl_det]
+labels: {lce: "Light collection efficiency", mean_refl_det: "Mean reflections (detected)"}
+xlabel: "Emission depth z [mm] (sensor at +15 mm)"

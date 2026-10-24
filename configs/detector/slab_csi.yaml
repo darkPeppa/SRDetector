@@ -1,0 +1,14 @@
+# Plain CsI block, EM only: validation against NIST XCOM (Beer-Lambert, K edges, partial cross sections).
+extends: ../defaults.yaml
+name: slab_csi
+geometry:
+  mode: slab
+  slab_material: CsI_Tl
+  slab_thickness: 1 mm
+physics:
+  optical: {scintillation: false, cerenkov: false}
+beam:
+  type: pencil
+  energy: 60 keV
+run:
+  events: 20000

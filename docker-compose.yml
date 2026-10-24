@@ -1,0 +1,41 @@
+# docker compose run --rm srdet <command>      e.g. `docker compose run --rm srdet study coating`
+# docker compose --profile root run --rm --service-ports root jsroot   (ROOT / JSROOT web browser)
+# docker compose --profile lab up jupyter                               (JupyterLab on :8888)
+services:
+  srdet:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: srdet
+    image: srdet:latest
+    working_dir: /work
+    volumes:
+      - ./:/work
+    environment:
+      - SRDET_THREADS=${SRDET_THREADS:-0}
+      - PYTHONPATH=/work/python   # edits of python/srdet take effect without rebuilding the image
+
+  root:
+    profiles: ["root"]
+    environment:
+      - PYTHONPATH=/work/python
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: root
+    image: srdet-root:latest
+    working_dir: /work
+    volumes:
+      - ./:/work
+    ports:
+      - "8090:8090"
+
+  jupyter:
+    profiles: ["lab"]
+    image: srdet:latest
+    working_dir: /work
+    volumes:
+      - ./:/work
+    ports:
+      - "8888:8888"
+    entrypoint: ["bash", "-lc", "source /opt/geant4/bin/geant4.sh; pip install -q jupyterlab >/dev/null; jupyter lab --ip=0.0.0.0 --no-browser --allow-root --NotebookApp.token=''"]

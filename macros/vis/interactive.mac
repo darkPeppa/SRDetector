@@ -1,0 +1,13 @@
+# Interactive session (srdet shell / srdet-sim without arguments), e.g.:
+#   /control/execute macros/vis/interactive.mac
+/srdet/geom/mode cluster7
+/srdet/mat/yieldScale 0.01
+/run/initialize
+/vis/open TSG_OFFSCREEN 1200x900
+/vis/drawVolume
+/vis/scene/add/trajectories smooth
+/vis/scene/endOfEventAction accumulate
+/gps/particle gamma
+/gps/energy 60 keV
+/gps/position 0 0 -16 mm
+/gps/direction 0 0 1

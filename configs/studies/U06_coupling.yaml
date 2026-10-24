@@ -1,0 +1,12 @@
+name: U06_coupling
+title: "U6a - optical coupling between channels and sensor"
+description: >
+  Air gap vs silicone grease vs epoxy (n = 1.0 / 1.465 / 1.55). With an air gap most photons
+  are trapped by total internal reflection at the exit face of CsI (n = 1.79).
+base: unit_optical.yaml
+scan:
+  geometry.coupling_material: [Air, OpticalGrease, Epoxy]
+quick: {run.events: 10, beam.optical.n: 100}
+metrics: [lce, lce_exit, mean_refl_det]
+labels: {lce: "Light collection efficiency", lce_exit: "Exit fraction", mean_refl_det: "Mean reflections"}
+xlabel: "Coupling medium"

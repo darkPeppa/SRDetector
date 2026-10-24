@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "srdet"
+version = "2.0.0"
+description = "Driver, analysis and reporting for the SRDetector Geant4 simulation"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "pyyaml", "uproot", "awkward", "pyarrow", "tabulate"]
+
+[project.scripts]
+srdet = "srdet.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["srdet*"]

@@ -1,0 +1,12 @@
+# One hexagonal cell with one channel. Optical photons are generated directly inside the core
+# (isotropic, uniform in volume, CsI(Tl) emission spectrum): isolates light transport (U1-U6).
+extends: ../defaults.yaml
+name: unit_optical
+geometry:
+  mode: unit
+  sensor: ideal
+beam:
+  type: optical
+  optical: {n: 500, energy: 0 eV, z_uniform: true, r_uniform: true, theta: -1 deg}
+run:
+  events: 200

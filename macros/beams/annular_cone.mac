@@ -1,0 +1,9 @@
+# Example: hollow cone from a point 50 mm in front of the window, 2-6 deg, Am-241 line
+/gps/particle gamma
+/gps/pos/type Point
+/gps/pos/centre 0 0 -66 mm
+/gps/ang/type iso
+/gps/ang/mintheta 174 deg
+/gps/ang/maxtheta 178 deg
+/gps/ene/type Mono
+/gps/ene/mono 59.54 keV

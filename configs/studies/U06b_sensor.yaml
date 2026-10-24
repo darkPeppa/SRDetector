@@ -1,0 +1,14 @@
+name: U06b_sensor
+title: "U6b - photodetector technology: signal, noise and cost"
+description: >
+  60 keV X-rays in one CsI(Tl) channel read by different photodetectors. QE(lambda) x fill factor
+  is applied on the sensor surface; read noise, pixel pitch and relative cost come from the
+  catalogue (typical data-sheet values). Figures of merit: detected photo-electrons per keV,
+  SNR for a 60 keV photon in one channel, and photo-electrons per keV per unit cost.
+base: unit_xray.yaml
+scan:
+  geometry.sensor: [ideal, aSi_FPD, CMOS_FSI, sCMOS_BSI, SiPM, PMT_bialkali, EMCCD]
+quick: {run.events: 50}
+metrics: [det_yield_per_keV, snr_60keV_per_channel, det_yield_per_cost, lce]
+labels: {det_yield_per_keV: "Photo-electrons per keV", snr_60keV_per_channel: "SNR at 60 keV (1 channel)", det_yield_per_cost: "pe/keV per relative cost", lce: "LCE incl. QE"}
+xlabel: "Sensor"

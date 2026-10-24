@@ -1,0 +1,35 @@
+# build artefacts
+build/
+build-*/
+out/
+.vs/
+*.o
+*.so
+*.a
+CMakeCache.txt
+CMakeFiles/
+
+# local runs (successful runs are packed into results/ by `srdet archive`)
+runs/
+*.root
+*.csv
+!tests/data/*.csv
+!configs/**/*.csv
+G4History.macro
+*.wrl
+*.heprep
+*.gmocren
+*.prim
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+*.swp
+docker/g4data/

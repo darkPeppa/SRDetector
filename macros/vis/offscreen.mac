@@ -1,0 +1,15 @@
+# Geometry and tracks without a display (works in Docker). Used by `srdet vis CONFIG`:
+# executed after /run/initialize and before /run/beamOn; offscreen_post.mac writes the files.
+#   TSG_OFFSCREEN -> PNG,  VRML2FILE -> .wrl (any VRML viewer, Blender, MeshLab)
+/vis/open TSG_OFFSCREEN 1600x1200
+/vis/viewer/set/background white
+# the scene extent follows the matrix (the world is much larger because of the source margin)
+/vis/drawVolume Matrix
+/vis/viewer/set/style surface
+/vis/viewer/set/hiddenMarker true
+/vis/scene/add/trajectories smooth
+/vis/modeling/trajectories/create/drawByParticleID
+/vis/modeling/trajectories/drawByParticleID-0/set gamma blue
+/vis/modeling/trajectories/drawByParticleID-0/set e- red
+/vis/modeling/trajectories/drawByParticleID-0/set opticalphoton orange
+/vis/scene/endOfEventAction accumulate 50

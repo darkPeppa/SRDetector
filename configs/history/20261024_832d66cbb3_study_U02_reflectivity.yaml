@@ -1,0 +1,129 @@
+name: study_U02_reflectivity
+description: Full cylindrical honeycomb detector, CsI(Tl) channels with Al coating
+  (legacy dimensions).
+geometry:
+  mode: unit
+  detector_radius: 11 mm
+  length: 30 mm
+  pitch: 208 um
+  channel_diameter: 200 um
+  channel_shape: circle
+  wall_material: LeadGlass_MCP
+  matrix_material: ''
+  core_material: CsI_Tl
+  coating_thickness: 2 um
+  coating_material: ''
+  world_material: Air
+  housing_material: G4_Al
+  housing_thickness: 1 mm
+  window_material: G4_Be
+  window_thickness: 0.5 mm
+  coupling_material: OpticalGrease
+  coupling_thickness: 50 um
+  sensor: ideal
+  sensor_window_thickness: -1 mm
+  sensor_active_thickness: 20 um
+  slab_material: CsI_Tl
+  slab_thickness: 1 mm
+  slab_half_xy: 50 mm
+  world_margin: 50 mm
+  check_overlaps: false
+optics:
+  coating: mirror
+  coating_reflectivity: 0.9
+  coating_sigma_alpha: 0 deg
+  film_thickness: 0.5 um
+  entrance_coating: Al
+materials:
+  yield_scale: 1.0
+  overrides: []
+physics:
+  em: livermore
+  radioactive: false
+  fluo: true
+  auger: true
+  pixe: false
+  deexcitation_ignore_cut: true
+  low_edge: 250 eV
+  cut_world: 0.1 mm
+  cut_detector: 1 um
+  optical:
+    scintillation: true
+    cerenkov: true
+    absorption: true
+    rayleigh: true
+    mie: false
+    boundary: true
+    wls: false
+    cerenkov_max_photons: 100
+    cerenkov_max_beta_change: 10
+    track_secondaries_first: true
+    finite_rise_time: false
+beam:
+  type: optical
+  particle: gamma
+  energy: 60 keV
+  spectrum: null
+  position:
+  - 0 mm
+  - 0 mm
+  radius: 5 mm
+  sigma: 1 mm
+  half_angle: 5 deg
+  distance: 100 mm
+  optical:
+    n: 500
+    energy: 0 eV
+    z: 0 mm
+    z_uniform: true
+    r_uniform: true
+    theta: -1 deg
+  macro: null
+run:
+  events: 200
+  threads: 0
+  seed: 12345
+  photon_fraction: 1.0
+  cell_hits: false
+  gdml: false
+  histograms: auto
+  extra_commands: []
+  post_commands: []
+study:
+  name: U02_reflectivity
+  title: U2 - light collection vs specular reflectivity R
+  description: 'Ideal specular mirror with constant R. Every photon needs about N
+    reflections to leave the channel, so LCE should follow LCE(1)·R^N; the overlay
+    uses the measured mean N at R = 1. Validates the reflection bookkeeping and shows
+    how fast the light loss grows with 1 - R.
+
+    '
+  base: unit_optical.yaml
+  set:
+    optics.coating: mirror
+    run.photon_fraction: 1.0
+  scan:
+    optics.coating_reflectivity:
+    - 0.8
+    - 0.85
+    - 0.9
+    - 0.93
+    - 0.95
+    - 0.97
+    - 0.98
+    - 0.99
+    - 0.995
+    - 1.0
+  quick:
+    run.events: 10
+    beam.optical.n: 100
+  metrics:
+  - lce
+  - coat_abs_prob
+  - mean_refl_det
+  reference: reflectivity
+  labels:
+    lce: Light collection efficiency
+    coat_abs_prob: Absorption per coating hit
+    mean_refl_det: Mean reflections (detected)
+  xlabel: Coating reflectivity R

@@ -1,0 +1,39 @@
+name: U08_wall_material
+title: U8 - honeycomb wall material
+description: 'Lead glass stops cross-talk X-rays but absorbs part of the beam; low-Z
+  glass does the opposite. 60 keV uniform beam on the central cell of a 7-cell cluster,
+  bare and Al-coated channels.
+
+  '
+base: cluster7_xray.yaml
+set:
+  geometry.pitch: 220 um
+scan:
+  optics.coating:
+  - none
+  - Al
+  geometry.wall_material:
+  - LeadGlass_MCP
+  - LeadGlass_NIST
+  - Borosilicate
+  - FusedSilica
+x: geometry.wall_material
+series: optics.coating
+quick:
+  run.events: 50
+metrics:
+- detection_efficiency
+- em_crosstalk
+- optical_crosstalk
+- mean_edep_wall_keV
+- det_yield_per_keV
+- psf_r50_um
+- psf_in_cell_fraction
+labels:
+  psf_r50_um: Light spread r50 [um]
+  psf_in_cell_fraction: Light inside own cell
+  detection_efficiency: Events with core deposit
+  em_crosstalk: Energy outside the hit cell
+  optical_crosstalk: Detected light from other cells
+  mean_edep_wall_keV: Mean deposit in walls [keV]
+xlabel: Wall material

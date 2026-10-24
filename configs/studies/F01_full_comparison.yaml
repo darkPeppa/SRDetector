@@ -1,0 +1,30 @@
+name: F01_full_comparison
+title: "F1 - full detector: baseline vs optimised variants (60 keV, parallel beam)"
+description: >
+  Candidate full-detector configurations built from the single-parameter studies, compared on
+  the same beam: detection efficiency, light yield, resolution limit, cross-talk and cost figures.
+base: full.yaml
+variants:
+  - label: baseline_Al_L30
+    set: {}
+  - label: legacy_materials_L30
+    set: {geometry.wall_material: Legacy_fred, optics.coating: Al_simple, optics.entrance_coating: none}
+  - label: Ag_L30
+    set: {optics.coating: Ag}
+  - label: ESR_L30
+    set: {optics.coating: ESR_LUT}
+  - label: Al_L2
+    set: {geometry.length: 2 mm}
+  - label: Ag_L2
+    set: {optics.coating: Ag, geometry.length: 2 mm}
+  - label: ESR_L2
+    set: {optics.coating: ESR_LUT, geometry.length: 2 mm}
+  - label: Ag_L2_pitch220
+    set: {optics.coating: Ag, geometry.length: 2 mm, geometry.pitch: 220 um}
+  - label: Ag_L2_sCMOS
+    set: {optics.coating: Ag, geometry.length: 2 mm, geometry.sensor: sCMOS_BSI}
+x: variant
+quick: {run.events: 20}
+metrics: [detection_efficiency, photopeak_fraction, det_yield_per_keV, resolution_fwhm_poisson_limit, em_crosstalk, optical_crosstalk, snr_60keV_per_channel, det_yield_per_cost, psf_r50_um, psf_in_cell_fraction]
+labels: {psf_r50_um: "Light spread r50 [um]", psf_in_cell_fraction: "Light inside own cell", detection_efficiency: "Events with core deposit", photopeak_fraction: "Full-energy fraction", det_yield_per_keV: "pe/keV", resolution_fwhm_poisson_limit: "FWHM Poisson limit", em_crosstalk: "EM cross-talk", optical_crosstalk: "Optical cross-talk", snr_60keV_per_channel: "SNR 60 keV / channel", det_yield_per_cost: "pe/keV per cost"}
+xlabel: "Configuration"

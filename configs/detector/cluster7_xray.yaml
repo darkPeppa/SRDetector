@@ -1,0 +1,16 @@
+# Central cell + 6 neighbours: energy sharing (EM cross-talk) and optical cross-talk.
+# Uniform beam over the central cell area (radius ~ pitch/2).
+extends: ../defaults.yaml
+name: cluster7_xray
+geometry:
+  mode: cluster7
+beam:
+  type: parallel
+  radius: 0.104 mm
+  energy: 60 keV
+materials:
+  yield_scale: 0.1
+run:
+  events: 2000
+  photon_fraction: 0.2       # detected photons stored for the point-spread metric
+  cell_hits: true
