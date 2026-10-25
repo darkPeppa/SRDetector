@@ -2,7 +2,9 @@
 //  - text: exact-string replacements of labels and buttons (also for content rendered later)
 //  - nav:  sidebar titles, brand, rotating slogan in the top bar
 //  - decor: a non-interactive layer of floating items (hearts / stickers) with names and,
-//           optionally, the user's own pictures from themes/<name>/user/ (served by /api/skin)
+//           optionally, the user's own pictures from themes/<name>/user/ (served by /api/skin);
+//           decor.onSpawn(el, item, layer) is called for every new item
+//  - extras(layer): optional skin-specific effects started once the page is up
 (() => {
   const S = window.SKIN;
   if (!S) return;
@@ -77,15 +79,17 @@
       el.style.setProperty('--rot', (Math.random() * 30 - 15) + 'deg');
       el.innerHTML = S.decor.render(it, Math.random());
       layer.appendChild(el);
+      if (S.decor.onSpawn) S.decor.onSpawn(el, it, layer);
       setTimeout(() => el.remove(), 26000);
     };
-    for (let i = 0; i < 4; i++) setTimeout(spawn, i * 900);
+    for (let i = 0; i < (S.decor.initial || 4); i++) setTimeout(spawn, i * 900);
     setInterval(spawn, S.decor.every || 3200);
     // a mascot frame at the bottom of the sidebar, cycling through the user's pictures
     const corner = document.createElement('div');
     corner.className = 'skin-corner';
     corner.innerHTML = S.decor.corner(pics[0]);
     (document.querySelector('.side') || document.body).appendChild(corner);
+    if (S.extras) S.extras(layer);  // skin-specific toys (pink: cat, glitter, popping hearts)
     const frame = corner.querySelector('img');
     if (frame && pics.length > 1) {
       let j = 0;

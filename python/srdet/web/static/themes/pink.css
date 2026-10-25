@@ -24,3 +24,41 @@ body { font-family: Nunito, system-ui, sans-serif; background: radial-gradient(c
 h1 { background: linear-gradient(90deg, #ff3d9a, #b14cff); -webkit-background-clip: text; color: transparent; }
 
 .skin-item { opacity: .9; }
+
+/* glitter, popping hearts, cursor trail */
+.glitter { position: absolute; color: #fff; text-shadow: 0 0 6px #ff7ac6, 0 0 12px #ffd6ec; animation: twinkle 2.4s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { opacity: .15; transform: scale(.5) rotate(0); } 50% { opacity: 1; transform: scale(1.15) rotate(45deg); } }
+.skin-item.popping { animation: none; transition: transform .25s ease-out, opacity .25s; opacity: 0 !important; transform: scale(1.5) !important; }
+.pink-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 70; }
+.pop-heart, .pop-ring, .trail { position: absolute; pointer-events: none; transform: translate(-50%, -50%); }
+.pop-heart { animation: pop-fly .8s cubic-bezier(.2, .7, .3, 1) forwards; }
+@keyframes pop-fly { from { opacity: 1; transform: translate(-50%, -50%) scale(.4); }
+  to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(25deg); } }
+.pop-ring { width: 14px; height: 14px; border: 3px solid #ff7ac6; border-radius: 50%; animation: pop-ring .5s ease-out forwards; }
+@keyframes pop-ring { to { width: 70px; height: 70px; opacity: 0; border-width: 1px; } }
+.trail { color: #ff3d9a; font-size: 13px; text-shadow: 0 0 6px #fff; animation: trail .7s ease-out forwards; }
+@keyframes trail { to { opacity: 0; transform: translate(-50%, 40%) scale(.3); } }
+
+/* the cat chasing the pointer */
+.pink-cat { position: fixed; left: 0; top: 0; width: 84px; height: 63px; margin-top: -52px; will-change: transform;
+  filter: drop-shadow(0 3px 4px rgba(176, 40, 110, .35)); }
+.pink-cat .cat-body { animation: cat-bob .28s ease-in-out infinite alternate; }
+.pink-cat .leg rect { fill: #fff; stroke: #4a1035; stroke-width: 1.4; }
+.pink-cat .leg { transform-box: fill-box; transform-origin: 50% 0; animation: cat-leg .28s ease-in-out infinite alternate; }
+.pink-cat .l2, .pink-cat .l3 { animation-direction: alternate-reverse; }
+.pink-cat .cat-tail { transform-box: fill-box; transform-origin: 100% 100%; animation: cat-tail .5s ease-in-out infinite alternate; }
+.pink-cat .cat-eyes { transform-box: fill-box; transform-origin: center; animation: cat-blink 4s infinite; }
+.pink-cat.sit .cat-body { animation: none; transform: translateY(3px); }
+.pink-cat.sit .leg { animation: none; transform: scaleY(.55); }
+.pink-cat.sit .cat-tail { animation-duration: 1.4s; }
+.pink-cat.nap .cat-eyes { animation: none; transform: scaleY(.15); }
+.pink-cat.nap .cat-tail { animation: none; }
+.pink-cat .cat-zzz { position: absolute; right: -6px; top: -14px; font: 700 14px Nunito, sans-serif; color: #b14cff; opacity: 0; transform: scaleX(var(--flip, 1)); }
+.pink-cat.nap .cat-zzz { opacity: 1; animation: cat-zzz 2s ease-in-out infinite; }
+.pink-cat.jump .cat-body { animation: cat-jump .45s ease-out; }
+@keyframes cat-bob { to { transform: translateY(-3px); } }
+@keyframes cat-leg { from { transform: rotate(28deg); } to { transform: rotate(-28deg); } }
+@keyframes cat-tail { from { transform: rotate(-12deg); } to { transform: rotate(16deg); } }
+@keyframes cat-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+@keyframes cat-zzz { 50% { transform: translateY(-5px) scaleX(var(--flip, 1)); } }
+@keyframes cat-jump { 40% { transform: translateY(-22px) rotate(-8deg); } }
