@@ -23,10 +23,13 @@ window.SKIN = {
   sloganEvery: 14000,  // one slogan per pass of the marquee (see .skin-slogan in rap.css)
   toastPrefix: '✖ ',
   decor: {
-    names: ['АНТИХАЙП', 'Замай', 'ХАЙП', 'Слава КПСС', 'Oxxxymiron', 'Ежемесячные', 'альтушечно', '💥', '📼'],
+    names: ['АНТИХАЙП', 'Замай', 'ХАЙП', 'Слава КПСС', 'Кац', 'Oxxxymiron', 'Синяк', 'Маваши', 'Ежемесячные', 'Федук',
+            'Катя Клэп', 'альтушечно', '💥', '📼'],
+    // sticker captions from the picture's file name prefix (themes/rap/user/<prefix>_N.jpg)
+    photoNames: { kreed: 'Крид', shulman: 'Шульман', katz: 'Кац', sinyak: 'Синяк', mavashi: 'Маваши', feduk: 'Федук', klep: 'Клэп' },
     every: 2600,
     render(it, r) {
-      if (it.img) return `<div class="sticker-img" style="--s:${100 + r * 60}px;transform:rotate(${(r * 16 - 8).toFixed(1)}deg)"><img src="${it.img}"><span class="sticker-cap">${r > .5 ? 'no hype' : 'антихайп'}</span></div>`;
+      if (it.img) return `<div class="sticker-img" style="--s:${100 + r * 60}px;transform:rotate(${(r * 16 - 8).toFixed(1)}deg)"><img src="${it.img}"><span class="sticker-cap">${this.photoNames[it.img.split('/').pop().split('_')[0]] || (r > .5 ? 'no hype' : 'антихайп')}</span></div>`;
       if (it.text.length <= 2) return `<span class="sparkle" style="font-size:${24 + r * 18}px">${it.text}</span>`;
       const cls = it.text === 'альтушечно' || it.text === 'АНТИХАЙП' ? 'tag-alt' : it.text === 'ХАЙП' ? 'tag-x' : '';
       return `<div class="tag ${cls}">${it.text}</div>`;

@@ -1,5 +1,5 @@
 name: U04c_length_xray
-title: "U4c - channel length with X-rays: absorption vs light loss (Ag, 30-150 keV)"
+title: "U4c - channel length with X-rays: absorption vs light loss (Ag, 30-662 keV)"
 description: >
   One Ag-coated CsI(Tl) channel, pencil X-ray beam along the axis, a-Si panel. Short channels let
   X-rays through, long channels lose the light: the signal per incident keV has an optimum L that
@@ -9,13 +9,14 @@ explain:
   why: >
     U04 показывает только потерю света, но короткий канал ещё и пропускает рентген. Здесь оба эффекта
     вместе: узкий пучок вдоль оси одного канала с Ag-покрытием, сенсор — a-Si панель. Длины 0.1–30 мм
-    (log) и четыре энергии: 30 кэВ (ниже K-края I), 60 кэВ (основная), 100 и 150 кэВ — так видно, как
-    оптимум сдвигается с энергией. Итоговая величина pe_per_incident_keV = det_yield_per_keV ×
+    (log) и шесть энергий: 30 кэВ (ниже K-края I), 60 кэВ (основная), 100 и 150 кэВ, а также 300 и 662 кэВ
+    (Cs-137) — там длина ослабления в CsI порядка сантиметров, и видно, для чего годятся исходные 30 мм. Итоговая величина pe_per_incident_keV = det_yield_per_keV ×
     detection_efficiency — сколько фотоэлектронов даёт каждый кэВ падающего (а не поглощённого) пучка.
   expect: >
     detection_efficiency растёт с L и насыщается после нескольких длин ослабления, det_yield_per_keV
     падает с L. Произведение имеет максимум, примерно при L ≈ 3/μ(E): доли мм при 30 кэВ, ~1 мм при
-    60 кэВ и несколько мм при 150 кэВ.
+    60 кэВ и несколько мм при 150 кэВ; при 300–662 кэВ поглощение не насыщается и до 30 мм, но в одном
+    канале 200 мкм комптоновский фотон уходит в соседей, поэтому сигнал на кэВ падающего мал.
   read: >
     Найдите максимум pe_per_incident_keV для своей энергии; слева от него теряется рентген, справа —
     свет. Сравните с оптимумом O01 (там ещё учитываются стенки, пятно и кросс-ток).
@@ -24,8 +25,8 @@ set:
   optics.coating: Ag
   run.events: 1000
 scan:
-  beam.energy: [30 keV, 60 keV, 100 keV, 150 keV]
-  geometry.length: [0.1 mm, 0.2 mm, 0.5 mm, 1 mm, 2 mm, 5 mm, 10 mm, 30 mm]
+  beam.energy: [30 keV, 60 keV, 100 keV, 150 keV, 300 keV, 662 keV]
+  geometry.length: [0.1 mm, 0.2 mm, 0.5 mm, 1 mm, 2 mm, 5 mm, 10 mm, 20 mm, 30 mm]
 derived:
   pe_per_incident_keV: "det_yield_per_keV * detection_efficiency"
 x: geometry.length

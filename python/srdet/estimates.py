@@ -59,7 +59,12 @@ def mu_rho(material: str, e_kev: float, column: str = "total") -> float | None:
     """Mass attenuation coefficient (cm2/g) of a catalogue material; log-log interpolation of
     XCOM, just above an absorption edge when the energy is exactly on it. None without data."""
     ref = XCOM_FOR.get(material)
-    a = _xcom(ref[0]) if ref else None
+    return mu_rho_table(ref[0], e_kev, column) if ref else None
+
+
+def mu_rho_table(table: str, e_kev: float, column: str = "total") -> float | None:
+    """The same for an XCOM table by name (e.g. "PbO")."""
+    a = _xcom(table)
     if a is None:
         return None
     e, v = a[:, 0] * 1e3, a[:, COLS[column]]

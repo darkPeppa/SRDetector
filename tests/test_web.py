@@ -247,3 +247,15 @@ def test_estimates_api(client, fake_run):
     assert "beer_lambert" in ids  # unit mode, 60 keV pencil beam in CsI(Tl), L = 2 mm
     c = next(c for c in r["checks"] if c["id"] == "beer_lambert")
     assert c["metric"] == "detection_efficiency" and c["low"] <= c["high"] and c["law"] and c["source"]
+
+
+def test_theory_and_verify_api(client, fake_run):
+    h = {x["name"]: x for x in client.get("/api/run/theory", params={"path": fake_run}).json()}
+    # the fake run has no first_z histogram; the endpoint must answer without one
+    assert isinstance(h, dict)
+    r = client.get("/api/verify/length", params={"energy": 60, "coating": "Ag"}).json()
+    m = r["model"]
+    assert len(m["L"]) == len(m["absorbed"]) == len(m["pe_per_incident_keV"]) > 10
+    assert 0.25 < m["attenuation_length_mm"] < 0.32  # 1/mu of CsI at 60 keV (NIST XCOM)
+    assert set(r["model_lce_uniform"]) >= {"Al", "Ag", "ideal"}
+    assert client.get("/api/verify/length", params={"energy": 60, "coating": "TiO2"}).status_code == 400

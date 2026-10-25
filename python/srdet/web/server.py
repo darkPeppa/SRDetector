@@ -515,6 +515,105 @@ def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastA
                 out.update({"best_run": best["run_dir"], "checks": checks, "summary": E.summary(checks)})
         return _clean(out)
 
+    @app.get("/api/run/theory")
+    def run_theory(path: str = Query(...)):
+        """Histograms of a run with the theory curves / lines drawn over them (srdet/theory.py)."""
+        from ..theory import run_theory as rt
+        return _clean(rt(_safe(path)))
+
+    def _latest_study(name: str) -> Path | None:
+        cands = [d for d in (runs_dir() / "studies").glob(f"*_{name}") if (d / "results.csv").exists()]
+        return sorted(cands)[-1] if cands else None
+
+    @app.get("/api/verify/length")
+    def verify_length(energy: float = 60.0, coating: str = "Ag", sensor_qe: bool = True):
+        """Why the channel length matters: NIST absorption and the channel model versus the
+        simulated studies U04 (light collection) and U04c (X-rays, signal per incident keV)."""
+        import numpy as np
+        from .. import estimates as E_
+        from .. import theory as T
+        if coating not in T.METAL_NK and coating not in ("ideal", "mirror"):
+            raise HTTPException(400, "coating: Al, Ag, Au, ideal")
+        if not 5 <= energy <= 5000:
+            raise HTTPException(400, "energy 5 .. 5000 keV")
+        u04, u04c = _latest_study("U04_length"), _latest_study("U04c_length_xray")
+        qe, qe_src = 1.0, "идеальный сенсор"
+        sim_x = []
+        if u04c is not None:
+            df = pd.read_csv(u04c / "results.csv")
+            df = df[df["ok"].astype(bool)] if "ok" in df else df
+            energies = sorted(set(float(e) for e in df["beam.energy"]))
+            sel = df[np.isclose(df["beam.energy"].astype(float), energy)]
+            sim_x = sel.sort_values("geometry.length")[["geometry.length", "detection_efficiency", "det_yield_per_keV",
+                                                       "pe_per_incident_keV", "run_dir"]].to_dict("records")
+            if sensor_qe and len(df):
+                g = _json(u04c / str(df.iloc[0]["run_dir"]) / "geometry.json")
+                if g.get("sensor_efficiency"):
+                    se = g["sensor_efficiency"]
+                    qe = T.emission_weighted_qe("CsI_Tl", (se["energy_eV"], se["efficiency"]))
+                    qe_src = f"{g.get('sensor')}: QE, усреднённая по спектру CsI(Tl)"
+        else:
+            energies = []
+        lengths = np.geomspace(0.05, 100, 90)
+        model = T.length_model(energy, coating, lengths, qe=qe)
+        sim_lce, model_lce = {}, {}
+        if u04 is not None:
+            df = pd.read_csv(u04 / "results.csv")
+            for coat, grp in df.groupby("optics.coating"):
+                grp = grp.sort_values("geometry.length")
+                sim_lce[coat] = {"L": grp["geometry.length"].tolist(), "lce": grp["lce"].tolist(),
+                                 "refl": grp["mean_refl_det"].tolist()}
+        for coat in ("Al", "Ag", "Au", "ideal"):
+            m = T.length_model(energy, coat, lengths, qe=qe)
+            model_lce[coat] = m["lce_uniform"]
+        # light collection versus emission depth in a 30 mm channel (study U03) and the model
+        u03, sim_depth, model_depth = _latest_study("U03_emission_depth"), {}, {}
+        if u03 is not None:
+            df = pd.read_csv(u03 / "results.csv")
+            length = 30.0
+            zs = np.linspace(-length / 2, length / 2, 120)
+            lam = T.EMISSION["CsI_Tl"][0]
+            n_core = E_.refractive_index(*E_.SCINT["CsI_Tl"][3:5], lam)
+            n_out = E_.refractive_index(*E_.COUPLING_N["OpticalGrease"], lam)
+            for coat, grp in df.groupby("optics.coating"):
+                grp = grp.sort_values("beam.optical.z")
+                sim_depth[coat] = {"z": grp["beam.optical.z"].tolist(), "lce": grp["lce"].tolist()}
+                if coat in T.METAL_NK:
+                    model_depth[coat] = {"z": zs.tolist(),
+                                         "lce": T.channel_lce(zs + length / 2, length, 0.2, coat, n_core, n_out, lam).tolist()}
+        return _clean({"energy": energy, "coating": coating, "model": model, "model_lce_uniform": model_lce,
+                       "sim_xray": sim_x, "sim_lce": sim_lce, "sim_depth": sim_depth, "model_depth": model_depth, "energies_simulated": energies, "qe": qe,
+                       "qe_source": qe_src,
+                       "studies": {"U03": _rel(u03) if u03 else None, "U04": _rel(u04) if u04 else None,
+                                   "U04c": _rel(u04c) if u04c else None}})
+
+    @app.get("/api/verify/summary")
+    def verify_summary():
+        """For the newest result of every study and optimisation: how many simulated points
+        agree with each analytic estimate."""
+        from .. import estimates as E
+        from ..studies import study_files
+        rows = []
+        targets = [(n, _latest_study(n), "study") for n in study_files()]
+        opt_dirs = {}
+        for d in sorted((runs_dir() / "optimize").glob("*")):
+            if (d / "trials.csv").exists() and not d.name.endswith("_quick"):
+                opt_dirs[re.sub(r"^\d{8}-\d{6}_", "", d.name)] = d
+        targets += [(n, d, "optimization") for n, d in opt_dirs.items()]
+        for name, d, kind in targets:
+            if d is None:
+                rows.append({"name": name, "kind": kind, "path": None, "checks": {}})
+                continue
+            table = d / ("trials.csv" if kind == "optimization" else "results.csv")
+            pts = E.point_estimates(d, pd.read_csv(table).to_dict("records"))
+            checks: dict = {}
+            for est in pts.values():
+                for e in est.values():
+                    c = checks.setdefault(e["id"], {"title": e["title"], "ok": 0, "warn": 0, "bad": 0})
+                    c[e["status"]] += 1
+            rows.append({"name": name, "kind": kind, "path": _rel(d), "points": len(pts), "checks": checks})
+        return _clean(rows)
+
     # ---------------- results archive + docs
     @app.get("/api/export")
     def export_dir(path: str = Query(...), fmt: str = "xlsx"):
