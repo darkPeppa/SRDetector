@@ -146,3 +146,34 @@ def test_estimates_flag_a_wrong_result():
     # a spectrum instead of one energy: no Beer-Lambert estimate rather than a wrong one
     cfg["beam"]["spectrum"] = {"source": "Am241"}
     assert "beer_lambert" not in {c["id"] for c in E.run_checks(cfg, good)}
+
+
+def test_channel_model_limits():
+    """Specular channel model: ideal mirror gives the escape cone x Fresnel, black walls only the
+    direct cone, light falls with the distance to the sensor, metals rank Ag > Al > Au."""
+    import numpy as np
+    from srdet import estimates as E, theory as T
+    lam = 550
+    n_core = E.refractive_index(1.7536, 0.0109, lam)
+    n_out = E.refractive_index(1.455, 0.0030, lam)
+    cone = E.escape_cone_fraction(n_core, n_out)
+    ideal = T.channel_lce(np.array([5.0]), 10, 0.2, "ideal", n_core, n_out, lam, entrance="ideal")[0]
+    assert 0.8 * cone < ideal < cone
+    near, far = T.channel_lce(np.array([9.9, 0.1]), 10, 0.2, "Al", n_core, n_out, lam)
+    assert near > 5 * far
+    z = np.linspace(0, 30, 50)
+    lce = {c: T.channel_lce(z, 30, 0.2, c, n_core, n_out, lam).mean() for c in ("Ag", "Al", "Au")}
+    assert lce["Ag"] > lce["Al"] > lce["Au"]
+    # metal reflectance from CsI: Al ~ 0.87 at normal incidence (13 % loss per hit, as in U01)
+    assert T.fresnel_r(n_core, T.metal_nk("Al", 550), np.array([0.0]))[0] == pytest.approx(0.87, abs=0.02)
+
+
+def test_length_model_optimum_moves_with_energy():
+    import numpy as np
+    from srdet import theory as T
+    L = np.geomspace(0.05, 100, 80)
+    opt = {e: L[int(np.argmax(T.length_model(e, "Ag", L)["pe_per_incident_keV"]))] for e in (30, 60, 150, 662)}
+    assert opt[30] < 2 and 0.5 < opt[60] < 2 and opt[150] > opt[60] and opt[662] > 10
+    m = T.length_model(60, "Ag", np.array([1.0, 30.0]))
+    assert m["absorbed"][1] - m["absorbed"][0] < 0.05      # 30 mm absorbs barely more than 1 mm at 60 keV
+    assert m["pe_per_incident_keV"][1] < 0.3 * m["pe_per_incident_keV"][0]

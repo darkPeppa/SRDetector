@@ -218,7 +218,7 @@
     </div>
     <div class="small muted" style="margin:-10px 0 12px" x-text="[run.mode, 'L=' + run.length, run.core, run.coating, run.sensor, run.beam].filter(Boolean).join(' · ')"></div>
     <div class="tabs">
-      <template x-for="t in ['обзор','графики','3D','геометрия','ROOT','конфиг','файлы','лог']"><a :class="{active: runTab === t}" @click="setRunTab(t)" x-text="t"></a></template>
+      <template x-for="t in ['обзор','теория vs Geant4','графики','3D','геометрия','ROOT','конфиг','файлы','лог']"><a :class="{active: runTab === t}" @click="setRunTab(t)" x-text="t"></a></template>
     </div>
 
     <div x-show="runTab === 'обзор'">
@@ -243,6 +243,29 @@
         <div class="scroll"><table class="t"><tbody>
           <template x-for="[k, v] in Object.entries(run.metrics_all)"><tr><td x-text="label(k)"></td><td class="small muted" x-text="k"></td><td class="num" x-text="fmt(v)"></td></tr></template>
         </tbody></table></div></div>
+    </div>
+
+    <div x-show="runTab === 'теория vs Geant4'">
+      <div class="card" style="margin-bottom:14px">
+        <div class="row"><b>Гистограммы Geant4 рядом с теорией</b>
+          <label class="row small"><input type="checkbox" :checked="showEst" @change="toggleEst($event.target.checked)"> показывать теорию</label>
+          <label class="row small"><input type="checkbox" x-model="theoryLog" @change="drawTheory()"> лог. шкала y</label>
+          <a class="small right" href="#/verify">вся верификация →</a></div>
+        <div class="small muted" style="margin-top:6px">Синим — результат Geant4, красным пунктиром — что дают справочные данные (NIST XCOM,
+          каталог материалов) и простые законы, вертикальные линии — где должны быть особенности. Если кривые расходятся, ниже написано, почему так может быть.</div>
+      </div>
+      <div class="empty card" x-show="theoryMsg" x-text="theoryMsg"></div>
+      <div class="grid g2">
+        <template x-for="(h, i) in theory" :key="h.name">
+          <div class="card">
+            <h2 x-text="h.title"></h2>
+            <div class="plot" :id="'theory-' + i" style="min-height:330px"></div>
+            <div class="small" x-show="h.agreement && h.agreement.sim !== null && h.agreement.sim !== undefined" style="margin:4px 0">
+              <span class="chip" x-text="h.agreement ? h.agreement.label + ': Geant4 ' + fmt(h.agreement.sim) + ' · теория ' + fmt(h.agreement.ref) + ' (' + theoryDev(h) + ')' : ''"></span></div>
+            <div class="small muted" x-text="h.text"></div>
+          </div>
+        </template>
+      </div>
     </div>
 
     <div x-show="runTab === 'графики'">
@@ -351,6 +374,93 @@
       <thead><tr><th>метрика</th><template x-for="r in compareRows"><th x-text="r.name"></th></template></tr></thead>
       <tbody><template x-for="k in info.key_metrics"><tr><td x-text="label(k)"></td><template x-for="r in compareRows"><td class="num" x-text="fmt(r[k])"></td></template></tr></template></tbody>
     </table></div></div>
+  </div>
+</section>
+
+<!-- ======================== verification ======================== -->
+<section x-show="route.view === 'verify'">
+  <div class="topbar"><h1>Верификация: Geant4 против NIST и простых законов</h1><div class="spacer"></div>
+    <label class="row small"><input type="checkbox" :checked="showEst" @change="toggleEst($event.target.checked)"> показывать теорию</label>
+    <a class="btn" href="#/docs?path=docs/physics.md">физика модели</a></div>
+
+  <div class="card">
+    <h2>Почему длина канала такая, а не 30 мм</h2>
+    <div class="sub">Сигнал = (сколько рентгена поглотилось) × (сколько света родилось) × (какая доля света дошла до сенсора) × QE.
+      Первое растёт с длиной, третье падает. Ниже каждый множитель посчитан двумя независимыми способами: по справочным данным
+      и простой модели (пунктир) и полным моделированием Geant4 (точки).</div>
+    <div class="row">
+      <span class="small muted">энергия рентгена, кэВ</span>
+      <input type="number" min="5" max="5000" style="width:90px" x-model.number="verifyE" @change="loadVerify()">
+      <template x-for="e in [30, 60, 100, 150, 300, 662]"><button class="btn sm" :class="{primary: +verifyE === e}" @click="verifyE = e; loadVerify()" x-text="e"></button></template>
+      <span class="small muted" style="margin-left:12px">покрытие канала</span>
+      <select style="width:110px" x-model="verifyCoat" @change="loadVerify()"><template x-for="c in ['Al','Ag','Au','ideal']"><option :value="c" x-text="c" :selected="c === verifyCoat"></option></template></select>
+      <span class="small muted" x-show="verify && verify.energies_simulated && !verify.energies_simulated.includes(+verifyE)">
+        для этой энергии точек Geant4 нет (посчитаны: <span x-text="verify ? verify.energies_simulated.join(', ') : ''"></span> кэВ — исследование U04c)</span>
+    </div>
+    <div class="warnbox" x-show="verifyMsg && verifyMsg !== 'считаю…'" x-text="verifyMsg" style="margin-top:8px"></div>
+    <template x-if="verify">
+      <div>
+        <div class="grid g4" style="margin-top:12px">
+          <div class="card kpi"><span class="v" x-text="fmt(verify.model.attenuation_length_mm) + ' мм'"></span><span class="l">длина ослабления 1/μ в CsI (NIST XCOM)</span></div>
+          <div class="card kpi"><span class="v" x-text="fmt(verify.model.L99_mm) + ' мм'"></span><span class="l">длина, на которой поглощается 99 % рентгена</span></div>
+          <div class="card kpi"><span class="v" x-text="vOptimum() ? fmt(vOptimum().L) + ' мм' : '—'"></span><span class="l">оптимальная длина по модели (максимум сигнала)</span></div>
+          <div class="card kpi"><span class="v" x-text="fmt(vAt('pe_per_incident_keV', 30) / (vOptimum() ? vOptimum().pe : 1) * 100) + ' %'"></span><span class="l">сигнал при L = 30 мм относительно оптимума</span></div>
+        </div>
+        <div class="infobox" style="margin-top:12px" x-html="verifyStory()"></div>
+        <div class="grid g3" style="margin-top:12px">
+          <div class="card"><h2>1. Сколько рентгена поглощается</h2><div class="plot" x-ref="vabs"></div>
+            <div class="small muted">Пунктир — закон Бера–Ламберта с коэффициентом ослабления из NIST XCOM, точки — Geant4. После
+              «99 %» дальнейшее удлинение канала ничего не добавляет.</div></div>
+          <div class="card"><h2>2. Какая доля света доходит до сенсора</h2><div class="plot" x-ref="vlce"></div>
+            <div class="small muted">Свет рождён равномерно по каналу (исследование U04). Пунктир — модель зеркального канала без
+              подгонки: свет внутри конуса выхода теряет 1 − R на каждом отражении, R — по комплексному показателю металла.
+              Число отражений растёт ∝ L, поэтому доля падает экспоненциально.</div></div>
+          <div class="card"><h2>3. Итог: сигнал от одного кэВ рентгена</h2><div class="plot" x-ref="vpe"></div>
+            <div class="small muted">Произведение 1 × 2 × выход × QE. Модель (пунктир) не подгонялась к Geant4 (точки).
+              Она упрощает геометрию — все лучи считаются меридиональными, не учтены отражения на границе с сенсором и
+              рассеяние рентгена в стенки, — поэтому отличается от Geant4 на 20–40 % (выше у коротких каналов, ниже у
+              длинных), но воспроизводит ход зависимости и положение оптимума.</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h2>Почему свет от входа теряется: светосбор в канале 30 мм в зависимости от места рождения</h2>
+          <div class="plot" x-ref="vdepth" style="min-height:380px"></div>
+          <div class="small muted">Рентген 60 кэВ поглощается у входа (z ≈ −15 мм), то есть свет рождается у дальнего от сенсора конца.
+            Точки — Geant4 (исследование U03, фотоны рождаются на заданной глубине), пунктир — модель. У металлов свет со входа
+            доходит в десятки раз хуже, чем у сенсора; у голого канала (none, полное внутреннее отражение) кривая плоская, но
+            свет уходит в соседние каналы. Модель здесь занижает свет из дальнего конца в 1.5–2.5 раза: в ней не учтены
+            фотоны, отражённые выходной гранью и вернувшиеся, и упрощён ход косых лучей. Поэтому абсолютные значения длинных
+            каналов надо брать из Geant4, а модель — как объяснение хода зависимости.</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h2>Бюджет одного рентгеновского кванта: сравнение двух длин</h2>
+          <div class="row small"><span class="muted">L₁, мм</span><input type="number" step="any" min="0.05" style="width:90px" x-model.number="verifyL1">
+            <span class="muted">L₂, мм</span><input type="number" step="any" min="0.05" style="width:90px" x-model.number="verifyL2">
+            <span class="muted">(Geant4 показан, если такая длина есть в U04c)</span></div>
+          <div class="scroll"><table class="t" style="margin-top:8px"><thead><tr><th>шаг</th>
+            <th class="num" x-text="'модель, L = ' + verifyL1 + ' мм'"></th><th class="num">Geant4</th>
+            <th class="num" x-text="'модель, L = ' + verifyL2 + ' мм'"></th><th class="num">Geant4</th></tr></thead>
+            <tbody><template x-for="(r, i) in vBudget(+verifyL1)"><tr><td x-text="r.step"></td>
+              <td class="num" x-text="r.model"></td><td class="num" x-text="r.sim"></td>
+              <td class="num" x-text="vBudget(+verifyL2)[i].model"></td><td class="num" x-text="vBudget(+verifyL2)[i].sim"></td></tr></template></tbody></table></div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Сводка: все исследования и оптимизации против оценок</h2>
+    <div class="sub">Для последнего результата каждого исследования и оптимизации: в скольких точках Geant4 совпал с оценкой
+      (зелёное), чуть вне допуска (жёлтое), сильно разошёлся (красное). Подробности — на странице прогона, вкладка «теория vs Geant4».</div>
+    <div class="empty" x-show="!verifySummary">считаю…</div>
+    <div class="scroll" x-show="verifySummary"><table class="t">
+      <thead><tr><th>результат</th><th class="num">точек</th><th>проверки</th></tr></thead>
+      <tbody><template x-for="r in (verifySummary || [])" :key="r.name"><tr>
+        <td><a x-show="r.path" :href="(r.kind === 'optimization' ? '#/opt?path=' : '#/study?path=') + r.path" x-text="r.name"></a>
+          <span x-show="!r.path" class="muted" x-text="r.name + ' (ещё не считалось)'"></span></td>
+        <td class="num" x-text="r.points || '—'"></td>
+        <td><template x-for="[id, c] in Object.entries(r.checks)"><span class="chip" :title="c.title"
+          :style="c.bad ? 'border-color:var(--bad);color:var(--bad)' : c.warn ? 'border-color:var(--warn)' : 'border-color:var(--ok)'"
+          x-text="c.title + ' ' + c.ok + '/' + (c.ok + c.warn + c.bad)"></span></template></td></tr></template></tbody></table></div>
   </div>
 </section>
 

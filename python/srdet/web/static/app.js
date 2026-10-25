@@ -69,6 +69,7 @@ function app() {
       { view: 'studies', title: 'Исследования', icon: '∿', alt: ['study'] },
       { view: 'optimize', title: 'Оптимизация', icon: '◎', alt: ['opt'] },
       { view: 'compare', title: 'Сравнение', icon: '⇄' },
+      { view: 'verify', title: 'Верификация', icon: '✓' },
       { view: 'jobs', title: 'Задачи', icon: '⏱', alt: ['job'] },
       { view: 'docs', title: 'Документация', icon: '📖' },
     ],
@@ -85,7 +86,8 @@ function app() {
     opt: null, optTab: 'метод и цель', optParam: '', onlyFeasible: false, trialSort: { col: 'trial', asc: true }, _optTick: 0,
     optimizeTab: 'constructor', ob: emptyOb(), obMeta: { metrics: [], fields: [], bases: [], samplers: {} }, obResult: null, obChecking: false,
     OBJECTIVE_PRESETS, studyEvents: {},
-    showEst: true, runEst: null, optEst: null, studyEst: null, scanEstNote: '',
+    showEst: true, runEst: null, optEst: null, studyEst: null, scanEstNote: '', theory: [], theoryMsg: '', theoryLog: false,
+    verify: null, verifyE: 60, verifyCoat: 'Ag', verifyL1: 1, verifyL2: 30, verifySummary: null, verifyMsg: '',
     optGeo: { cell: '', stack: '' }, optGeoInfo: '',
     job: null, docHtml: '', lightbox: null, modal: null, toast: '', _jobStatus: {},
     tracksN: 20, v3dAllCells: false, v3dCellInfo: {}, v3d: null, v3dEvents: [], v3dEvent: 'all', v3dParticles: {}, v3dCounts: {},
@@ -124,6 +126,7 @@ function app() {
       if (view === 'job') this.loadJob(p.id);
       if (view === 'docs') this.loadDoc(p.path || 'README.md');
       if (view === 'compare') this.loadCompare();
+      if (view === 'verify') this.loadVerify();
       window.scrollTo(0, 0);
     },
     latestOpts() {
@@ -363,6 +366,176 @@ function app() {
       try { localStorage.setItem('srdet-est', on ? '1' : '0'); } catch (e) { /* private mode */ }
       if (this.route.view === 'opt' && this.optTab === 'параметр → гистограммы') this.drawScan();
       if (this.route.view === 'study') this.drawStudy();
+      if (this.route.view === 'run' && this.runTab === 'теория vs Geant4') this.drawTheory();
+      if (this.route.view === 'verify') this.drawVerify();
+    },
+    // ------------------------------------------------------------ verification page
+    async loadVerify() {
+      this.verifyMsg = 'считаю…';
+      try {
+        this.verify = await api(`/api/verify/length?energy=${+this.verifyE}&coating=${this.verifyCoat}`);
+        this.verifyMsg = '';
+        await this.$nextTick();
+        this.drawVerify();
+      } catch (e) { this.verifyMsg = e.message; }
+      if (!this.verifySummary) api('/api/verify/summary').then(r => (this.verifySummary = r)).catch(() => {});
+    },
+    // model value at length L (log-interpolated over the model grid)
+    vAt(key, L) {
+      const m = this.verify && this.verify.model;
+      if (!m) return NaN;
+      const xs = m.L.map(Math.log), x = Math.log(L), ys = m[key];
+      if (x <= xs[0]) return ys[0];
+      for (let i = 1; i < xs.length; i++) if (x <= xs[i]) { const f = (x - xs[i - 1]) / (xs[i] - xs[i - 1]); return ys[i - 1] + f * (ys[i] - ys[i - 1]); }
+      return ys[ys.length - 1];
+    },
+    verifyStory() {
+      const v = this.verify, m = v.model, f = x => this.fmt(x), opt = this.vOptimum();
+      if (!opt) return '';
+      const L = 30, coat = v.coating;
+      const refl = ((v.sim_lce || {})[coat] || {});
+      const i30 = (refl.L || []).findIndex(x => Math.abs(x - L) < 1e-6);
+      const nRefl = i30 >= 0 ? refl.refl[i30] : null;
+      const ratio = this.vAt('pe_per_incident_keV', L) / opt.pe;
+      let s = `<b>${f(v.energy)} кэВ:</b> длина ослабления рентгена в CsI 1/μ = <b>${f(m.attenuation_length_mm)} мм</b> (NIST XCOM), ` +
+        `99 % поглощается на первых <b>${f(m.L99_mm)} мм</b>. `;
+      if (m.L99_mm < L) {
+        s += `Поэтому канал ${L} мм поглощает почти столько же, сколько канал ${f(opt.L)} мм ` +
+          `(${f(this.vAt('absorbed', L))} против ${f(this.vAt('absorbed', opt.L))}), а свет рождается у самого входа и должен пройти ` +
+          `до сенсора все ${L} мм` + (nRefl ? `, сделав в среднем ~${f(nRefl)} отражений от стенки (${coat}, Geant4)` : '') +
+          `. До сенсора доходит ${f(this.vAt('lce_xray', L))} света против ${f(this.vAt('lce_xray', opt.L))} при оптимальной длине — ` +
+          `сигнал в <b>${f(1 / ratio)} раза меньше</b>. Лишняя длина не ловит рентген, а только теряет свет.`;
+      } else {
+        s += `Здесь рентген проникает глубоко, и длинный канал оправдан: при ${L} мм поглощается ${f(this.vAt('absorbed', L))}, ` +
+          `оптимум модели — около ${f(opt.L)} мм. Исходные 30 мм подходят для жёсткого излучения (сотни кэВ), а не для 60 кэВ.`;
+      }
+      if (v.energy > 200) s += ' <i>Выше ~200 кэВ модель завышает сигнал: она считает, что провзаимодействовавший квант отдаёт всю энергию, ' +
+        'а в канале 200 мкм комптоновский фотон обычно уходит в стенки и соседние соты — это видно по точкам Geant4.</i>';
+      return s;
+    },
+    vSim(L) { return ((this.verify && this.verify.sim_xray) || []).find(r => Math.abs(r['geometry.length'] - L) < 1e-6 * Math.max(1, L)); },
+    vOptimum() {
+      const m = this.verify && this.verify.model;
+      if (!m) return null;
+      let k = 0; m.pe_per_incident_keV.forEach((v, i) => { if (v > m.pe_per_incident_keV[k]) k = i; });
+      return { L: m.L[k], pe: m.pe_per_incident_keV[k] };
+    },
+    // photon-by-photon light budget of one X-ray quantum at channel length L
+    vBudget(L) {
+      if (!this.verify) return [];
+      const v = this.verify, m = v.model, E = v.energy;
+      const pAbs = this.vAt('absorbed', L), lce = this.vAt('lce_xray', L);
+      const born = m.yield_per_keV * E;
+      const sim = this.vSim(L);
+      return [
+        { step: 'Рентгеновский квант', model: `${this.fmt(E)} кэВ`, sim: '' },
+        { step: 'Поглощён в сцинтилляторе (NIST, Бер–Ламберт)', model: this.fmt(pAbs), sim: sim ? this.fmt(sim.detection_efficiency) : '' },
+        { step: 'Рождено фотонов света при поглощении', model: this.fmt(born), sim: '' },
+        { step: 'Доля света, дошедшая до сенсора', model: this.fmt(lce), sim: '' },
+        { step: 'Квантовая эффективность сенсора', model: this.fmt(v.qe), sim: '' },
+        { step: 'Фотоэлектронов на поглощённый кэВ', model: this.fmt(this.vAt('pe_per_absorbed_keV', L)), sim: sim ? this.fmt(sim.det_yield_per_keV) : '' },
+        { step: 'Фотоэлектронов на кэВ падающего', model: this.fmt(this.vAt('pe_per_incident_keV', L)), sim: sim ? this.fmt(sim.pe_per_incident_keV) : '' },
+        { step: 'Фотоэлектронов на один квант', model: this.fmt(this.vAt('pe_per_incident_keV', L) * E), sim: sim ? this.fmt(sim.pe_per_incident_keV * E) : '' },
+      ];
+    },
+    drawVerify() {
+      const v = this.verify;
+      if (!v) return;
+      const m = v.model, red = '#d62728', blue = '#2a6fdb';
+      const colors = { Al: '#7f7f7f', Ag: '#2a6fdb', Au: '#d4a017', ideal: '#19a979', ESR_LUT: '#945ecf' };
+      const vline = (x, label) => [{ type: 'line', xref: 'x', yref: 'paper', x0: x, x1: x, y0: 0, y1: 1, line: { color: red, width: 1, dash: 'dot' } },
+                                   { x: Math.log10(x), y: 1, xref: 'x', yref: 'paper', text: label, showarrow: false, xanchor: 'left', font: { size: 10, color: red } }];
+      const lay = (ytitle, extra = {}) => this.layout({ xaxis: { title: 'длина канала L, мм', type: 'log' }, yaxis: { title: ytitle },
+                                                       margin: { l: 60, r: 12, t: 20, b: 80 }, ...extra });
+      const sx = v.sim_xray || [];
+      const showM = this.showEst;
+      // 1) absorption
+      const l99 = vline(m.L99_mm, '99 % поглощено'), l1 = vline(m.attenuation_length_mm, '1/μ');
+      Plotly.react(this.$refs.vabs, [
+        ...(showM ? [{ type: 'scatter', mode: 'lines', x: m.L, y: m.absorbed, name: 'NIST XCOM: T_окна·(1 − e^(−μL))', line: { color: red, dash: 'dash', width: 2 } }] : []),
+        { type: 'scatter', mode: 'markers', x: sx.map(r => r['geometry.length']), y: sx.map(r => r.detection_efficiency), name: 'Geant4 (U04c)', marker: { color: blue, size: 9 } },
+      ], lay('доля поглощённого рентгена', { shapes: [l99[0], l1[0]], annotations: [l99[1], l1[1]], yaxis: { title: 'доля поглощённого рентгена', range: [0, 1.05] } }), { responsive: true });
+      // 2) light collection vs length (uniform emission, U04)
+      const tr = [];
+      for (const [coat, d] of Object.entries(v.sim_lce || {}))
+        tr.push({ type: 'scatter', mode: 'markers', x: d.L, y: d.lce, name: `Geant4 ${coat} (U04)`, marker: { color: colors[coat] || '#555', size: 8 } });
+      if (showM) {
+        for (const [coat, ys] of Object.entries(v.model_lce_uniform || {}))
+          tr.push({ type: 'scatter', mode: 'lines', x: m.L, y: ys, name: `модель ${coat}`, line: { color: colors[coat] || '#555', dash: 'dash', width: 1.6 } });
+        tr.push({ type: 'scatter', mode: 'lines', x: [m.L[0], m.L[m.L.length - 1]], y: [m.escape_cone, m.escape_cone], name: 'конус выхода (предел)', line: { color: red, dash: 'dot', width: 1 } });
+      }
+      Plotly.react(this.$refs.vlce, tr, lay('доля света до сенсора', { yaxis: { title: 'доля света до сенсора', type: 'log',
+        tickvals: [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1], ticktext: ['0.001', '0.003', '0.01', '0.03', '0.1', '0.3', '1'] } }), { responsive: true });
+      // 2b) light collection versus emission depth (U03) - where the model is weakest
+      const td = [];
+      for (const [coat, d] of Object.entries(v.sim_depth || {}))
+        td.push({ type: 'scatter', mode: 'markers+lines', x: d.z, y: d.lce, name: `Geant4 ${coat} (U03)`, line: { color: colors[coat] || (coat === 'none' ? '#e8743b' : '#555'), width: 1 }, marker: { size: 8 } });
+      if (showM) for (const [coat, d] of Object.entries(v.model_depth || {}))
+        td.push({ type: 'scatter', mode: 'lines', x: d.z, y: d.lce, name: `модель ${coat}`, line: { color: colors[coat] || '#555', dash: 'dash', width: 1.6 } });
+      if (this.$refs.vdepth) Plotly.react(this.$refs.vdepth, td, this.layout({ xaxis: { title: 'где родился свет, z, мм (вход −15, сенсор +15)' },
+        yaxis: { title: 'доля света до сенсора', type: 'log', tickvals: [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1], ticktext: ['0.001', '0.003', '0.01', '0.03', '0.1', '0.3', '1'] },
+        margin: { l: 60, r: 12, t: 20, b: 80 } }), { responsive: true });
+      // 3) result
+      const opt = this.vOptimum(), lo = vline(opt.L, 'оптимум модели');
+      Plotly.react(this.$refs.vpe, [
+        ...(showM ? [{ type: 'scatter', mode: 'lines', x: m.L, y: m.pe_per_incident_keV, name: 'модель: на кэВ падающего', line: { color: red, dash: 'dash', width: 2 } },
+                     { type: 'scatter', mode: 'lines', x: m.L, y: m.pe_per_absorbed_keV, name: 'модель: на кэВ поглощённого', line: { color: red, dash: 'dot', width: 1.3 } }] : []),
+        { type: 'scatter', mode: 'markers', x: sx.map(r => r['geometry.length']), y: sx.map(r => r.pe_per_incident_keV), name: 'Geant4: на кэВ падающего', marker: { color: blue, size: 9 } },
+        { type: 'scatter', mode: 'markers', x: sx.map(r => r['geometry.length']), y: sx.map(r => r.det_yield_per_keV), name: 'Geant4: на кэВ поглощённого', marker: { color: blue, size: 7, symbol: 'circle-open' } },
+      ], lay('фотоэлектронов на кэВ', showM ? { shapes: [lo[0]], annotations: [lo[1]] } : {}), { responsive: true });
+    },
+    async loadTheory() {
+      this.theory = [];
+      this.theoryMsg = 'считаю…';
+      const path = this.run.path;
+      try {
+        const t = await api('/api/run/theory?path=' + encodeURIComponent(path));
+        if (!this.run || this.run.path !== path) return;
+        this.theory = t;
+        this.theoryMsg = t.length ? '' : 'Для этого прогона нет гистограмм, с которыми можно сравнить теорию (нет srdet.root или пучок не подходит).';
+        await this.$nextTick();
+        this.drawTheory();
+      } catch (e) { this.theoryMsg = e.message; }
+    },
+    theoryDev(h) {
+      const a = h.agreement;
+      if (!a || !a.ref || a.sim === null || a.sim === undefined) return '';
+      const d = 100 * (a.sim - a.ref) / Math.abs(a.ref);
+      return (d >= 0 ? '+' : '') + d.toFixed(1) + ' %';
+    },
+    // the histograms are drawn as steps; points (lce_depth) as markers
+    drawTheory() {
+      const red = '#d62728', blue = '#2a6fdb';
+      this.theory.forEach((h, i) => {
+        const el = document.getElementById('theory-' + i);
+        if (!el) return;
+        const traces = [], shapes = [], ann = [];
+        let xr = null;
+        if (h.points) {
+          traces.push({ type: 'scatter', mode: 'markers', x: h.points.x, y: h.points.y, name: 'Geant4', marker: { color: blue, size: 7 } });
+          if (this.showEst) for (const c of h.curves) traces.push({ type: 'scatter', mode: 'lines', x: c.x, y: c.y, name: c.name, line: { color: red, dash: 'dash', width: 2 } });
+        } else {
+          const e = h.edges, v = h.values;
+          let lo = v.findIndex(x => x > 0), hi = v.length - 1 - [...v].reverse().findIndex(x => x > 0);
+          if (lo < 0) return;
+          const pad = Math.max(2, Math.round(0.05 * (hi - lo)));
+          lo = Math.max(0, lo - pad); hi = Math.min(v.length - 1, hi + pad);
+          xr = [e[lo], e[hi + 1]];
+          const step = (ys) => { const xs = [], yy = []; for (let j = lo; j <= hi; j++) { xs.push(e[j], e[j + 1]); yy.push(ys[j], ys[j]); } return [xs, yy]; };
+          const [xs, ys] = step(v);
+          traces.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, name: 'Geant4', line: { color: blue, width: 1.4 }, fill: 'tozeroy', fillcolor: 'rgba(42,111,219,0.12)' });
+          if (this.showEst) for (const c of h.curves) {
+            const [cx, cy] = step(c.y);
+            traces.push({ type: 'scatter', mode: 'lines', x: cx, y: cy, name: c.name, line: { color: red, dash: 'dash', width: 1.8 } });
+          }
+        }
+        if (this.showEst) (h.lines || []).forEach((l, k) => {
+          shapes.push({ type: 'line', xref: 'x', yref: 'paper', x0: l.x, x1: l.x, y0: 0, y1: 1, line: { color: red, width: 1, dash: 'dot' } });
+          ann.push({ x: l.x, y: 1 - 0.09 * (k % 4), xref: 'x', yref: 'paper', text: l.label, showarrow: false, font: { size: 10, color: red }, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.0)' });
+        });
+        Plotly.react(el, traces, this.layout({ shapes, annotations: ann, margin: { l: 56, r: 12, t: 26, b: 70 },
+          xaxis: { title: h.xlabel, range: xr || undefined }, yaxis: { title: h.ylabel, type: this.theoryLog && !h.points ? 'log' : 'linear' } }), { responsive: true });
+      });
     },
     estFor(checks, metric) { return (checks || []).find(c => c.metric === metric); },
     estBadge(s) { return { ok: 'ok', warn: 'warn', bad: 'bad' }[s] || ''; },
@@ -426,6 +599,7 @@ function app() {
         this.renderGeometry(g, this.$refs.lattice, 'runGeo', 'geoInfo');
       }
       if (t === 'ROOT' && this.run.has_root) await this.openRoot();
+      if (t === 'теория vs Geant4') await this.loadTheory();
       if (t === '3D') await this.open3d();
     },
     async open3d() {

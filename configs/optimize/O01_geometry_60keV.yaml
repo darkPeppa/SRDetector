@@ -9,7 +9,7 @@ base: full.yaml
 set:
   beam.energy: 60 keV
 space:
-  L:    {path: geometry.length, low: 0.2 mm, high: 10 mm, log: true}
+  L:    {path: geometry.length, low: 0.2 mm, high: 30 mm, log: true}
   D:    {path: geometry.channel_diameter, low: 100 um, high: 400 um, log: true}
   wall: {low: 2 um, high: 40 um}
   coat: {path: optics.coating, values: [Al, Ag, ESR_LUT]}
