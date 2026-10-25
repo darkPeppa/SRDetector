@@ -537,6 +537,27 @@ def load_spec(name_or_path: str) -> dict:
     return yaml.safe_load(p.read_text())
 
 
+def scan_parameter(opt_dir: Path, alias: str, points: int = 6, events: int | None = None,
+                   evaluator: Evaluator | None = None) -> Path:
+    """Vary one parameter over its whole range with all others fixed at the best point of a
+    finished optimisation; the new trials (stage 'scan_<alias>') are added to trials.csv."""
+    spec = yaml.safe_load((opt_dir / "spec.yaml").read_text())
+    opt = Optimizer(spec, out_dir=opt_dir, evaluator=evaluator)
+    p = next((q for q in opt.params if q.alias == alias), None)
+    if p is None:
+        raise ValueError(f"{alias} is not a parameter of {spec['name']}: {[q.alias for q in opt.params]}")
+    final = opt.dir / "final.csv"
+    best = (pd.read_csv(final).iloc[0].to_dict() if final.exists()
+            else opt._rank([t for t in opt.trials if t.get("feasible")] or opt.trials)[0])
+    base = opt._point(best)
+    values = p.values if p.kind == "choice" else sorted({p.unit_from(u) for u in np.linspace(0, 1, max(2, points))})
+    ev = int(events or best.get("events") or opt.search.get("events", [1000])[-1])
+    seed = int(opt.search.get("seed", 1)) * 100000 + 700000
+    for i, v in enumerate(values):
+        opt.evaluate(dict(base, **{alias: v}), ev, seed + i, f"scan_{alias}")
+    return opt.report()
+
+
 def run_optimization(name_or_path: str, quick: bool = False, resume: Path | None = None,
                      extra_sets: list[str] | None = None) -> Path:
     spec = load_spec(name_or_path)

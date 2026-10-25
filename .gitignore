@@ -33,3 +33,10 @@ __pycache__/
 .DS_Store
 *.swp
 docker/g4data/
+
+# readable exports (srdet export / web 'Скачать')
+**/export/
+
+# your own pictures for the web skins (not committed)
+python/srdet/web/static/themes/*/user/*
+!python/srdet/web/static/themes/*/user/.gitkeep

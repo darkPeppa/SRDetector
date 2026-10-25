@@ -1,4 +1,5 @@
 # docker compose up web                         -> http://localhost:8080 (browser UI)
+# docker compose up web-pink / web-rap          -> http://localhost:8081 / 8082 (same UI, other skins)
 # docker compose run --rm srdet <command>      e.g. `docker compose run --rm srdet study coating`
 # docker compose --profile root run --rm --service-ports root jsroot   (ROOT / JSROOT web browser)
 # docker compose --profile lab up jupyter                               (JupyterLab on :8888)
@@ -29,6 +30,22 @@ services:
     ports:
       - "${SRDET_WEB_PORT:-8080}:8080"
     command: ["web", "--port", "8080"]
+
+  web-pink:   # same UI, pink skin:  docker compose up web-pink  -> http://localhost:8081
+    image: srdet:latest
+    working_dir: /work
+    volumes: ["./:/work"]
+    environment: ["SRDET_THREADS=${SRDET_THREADS:-0}", "PYTHONPATH=/work/python", "PYTHONUNBUFFERED=1"]
+    ports: ["${SRDET_PINK_PORT:-8081}:8080"]
+    command: ["web", "--port", "8080", "--skin", "pink"]
+
+  web-rap:    # same UI, rap skin:   docker compose up web-rap   -> http://localhost:8082
+    image: srdet:latest
+    working_dir: /work
+    volumes: ["./:/work"]
+    environment: ["SRDET_THREADS=${SRDET_THREADS:-0}", "PYTHONPATH=/work/python", "PYTHONUNBUFFERED=1"]
+    ports: ["${SRDET_RAP_PORT:-8082}:8080"]
+    command: ["web", "--port", "8080", "--skin", "rap"]
 
   root:
     profiles: ["root"]

@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Lobster&family=Nunito:wght@400;600;800&display=swap');
+@import url('/static/themes/common.css');
+:root, :root[data-theme="dark"], :root[data-theme="light"] {
+  --bg: #fff0f7; --panel: #ffffff; --panel-2: #ffe3f1; --text: #4a1035; --muted: #a0527d; --border: #ffc2e1;
+  --accent: #ff3d9a; --accent-2: #b14cff; --ok: #e0408f; --warn: #ff8fc8; --bad: #c2185b; --code: #fff4fa;
+  --wall: #ffb3d9; --core: #ff5fae; --coat: #ffd700; --rim: #ffe9f4; --shadow: 0 4px 14px rgba(255, 61, 154, .15);
+}
+body { font-family: Nunito, system-ui, sans-serif; background: radial-gradient(circle at 10% 0%, #ffd6ec 0, transparent 40%),
+  radial-gradient(circle at 90% 20%, #f3d1ff 0, transparent 35%), var(--bg); }
+.side { background: linear-gradient(180deg, #ffe0f0, #ffd0f5); }
+.skin-logo { font-family: Pacifico, cursive; font-size: 20px; background: linear-gradient(90deg, #ff3d9a, #b14cff);
+  -webkit-background-clip: text; color: transparent; }
+.card { border-radius: 18px; border-width: 2px; }
+.btn { border-radius: 999px; }
+.btn.primary { background: linear-gradient(90deg, #ff3d9a, #ff7ac6); border: 0; box-shadow: 0 4px 12px rgba(255, 61, 154, .35); }
+.nav a.active { background: #ffffffb3; color: #ff3d9a; }
+.badge.ok { background: #ffd6ec; color: #d81b74; }
+.skin-slogan { font-family: Lobster, cursive; font-weight: 400; color: #ff3d9a; font-size: 17px; }
+.sparkle { filter: drop-shadow(0 0 6px #fff); }
+.corner-cap { font-family: Lobster, cursive; color: #ff3d9a; background: #fff; border: 2px solid #ffc2e1; border-radius: 999px; padding: 4px 12px; margin-top: 6px; }
+.log { background: #3d0d2b; color: #ffd6ec; }
+h1 { background: linear-gradient(90deg, #ff3d9a, #b14cff); -webkit-background-clip: text; color: transparent; }
+
+.skin-item { opacity: .55; }

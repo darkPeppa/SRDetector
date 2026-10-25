@@ -92,6 +92,8 @@ run:
   photon_fraction: 0.0        # stored fraction of detected photons (ntuple 'photons')
   cell_hits: false
   gdml: false
+  tracks: 0                   # trajectories of the first N events -> tracks.jsonl (3D viewer in the web UI)
+  tracks_optical_every: 50    # keep every N-th optical photon track
   histograms: auto            # auto ranges from beam energy and geometry
   extra_commands: []          # appended before /run/beamOn
   post_commands: []           # appended after /run/beamOn

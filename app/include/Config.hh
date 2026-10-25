@@ -80,6 +80,9 @@ struct SRDetConfig
     G4double histNScintMax = 60000.;
     G4double histNDetMax = 20000.;
     G4double histTmax = 20000. * ns;
+    // trajectories for the 3D viewer of the web UI (tracks.jsonl); needs /tracking/storeTrajectory 1
+    G4int tracksEvents = 0;          // number of events whose trajectories are written
+    G4int tracksOpticalEvery = 50;   // keep every N-th optical photon trajectory (there are thousands)
 
   private:
     SRDetConfig() = default;

@@ -17,8 +17,21 @@ from srdet.web.jobs import JobManager  # noqa: E402
 from srdet.web.server import create_app  # noqa: E402
 
 
+@pytest.fixture(scope="module", autouse=True)
+def repo_runs():
+    """The physics tests point SRDET_RUNS to a temporary folder; the web API serves runs/ of the repo."""
+    import os
+    old = os.environ.get("SRDET_RUNS")
+    os.environ["SRDET_RUNS"] = str(ROOT / "runs")
+    yield
+    if old is None:
+        os.environ.pop("SRDET_RUNS", None)
+    else:
+        os.environ["SRDET_RUNS"] = old
+
+
 @pytest.fixture(scope="module")
-def fake_run():
+def fake_run(repo_runs):
     d = ROOT / "runs" / f"zz_test_web_{uuid.uuid4().hex[:6]}"
     (d / "plots").mkdir(parents=True)
     (d / "config.yaml").write_text("name: fake\ngeometry: {mode: unit, length: 2 mm, coating_thickness: 2 um}\n"
@@ -31,7 +44,18 @@ def fake_run():
                                                  "matrix_radius_mm": 0.121, "cells": [[0, 0, 0.0, 0.0]],
                                                  "n_cells": 1, "length_mm": 2, "z_front_mm": -1.5,
                                                  "z_back_mm": 1.07, "z_sensor_mm": 1.05}))
-    (d / "plots" / "edep_spectrum.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(2, 1.5))
+    ax.plot([0, 1], [0, 1])
+    fig.savefig(d / "plots" / "edep_spectrum.png")
+    plt.close(fig)
+    import numpy as np
+    import uproot
+    with uproot.recreate(d / "srdet.root") as f:  # small ROOT file: one histogram + an events tree
+        f["n_det"] = (np.array([0.0, 5, 9, 3]), np.array([0.0, 10, 20, 30, 40]))
+        f["events"] = {"evt": np.arange(4, dtype=np.int32), "n_det": np.array([0, 12, 25, 31], dtype=np.int32)}
     yield d.relative_to(ROOT).as_posix()
     shutil.rmtree(d, ignore_errors=True)
 
@@ -104,3 +128,68 @@ def test_studies_and_optimizations_listing(client):
     assert any(s["name"] == "U01_coating" for s in st["specs"])
     op = client.get("/api/optimizations").json()
     assert any(s["name"].startswith("O01") for s in op["specs"])
+
+
+class DummyJobs:
+    """Records submissions instead of running srdet in a subprocess."""
+    def __init__(self):
+        self.submitted = []
+
+    def submit(self, kind, args, title, meta=None):
+        job = {"id": f"j{len(self.submitted)}", "kind": kind, "args": args, "title": title, "meta": meta or {},
+               "status": "queued", "created": "2026-01-01T00:00:00", "result": None}
+        self.submitted.append(job)
+        return job
+
+    def get(self, jid, tail=200):
+        return next((dict(j, log_tail="") for j in self.submitted if j["id"] == jid), None)
+
+    def list(self):
+        return self.submitted
+
+    def cancel(self, jid):
+        return False
+
+
+def test_tracks_and_scan_jobs(fake_run):
+    jobs = DummyJobs()
+    c = TestClient(create_app(jobs))
+    r = c.post("/api/jobs", json={"kind": "tracks", "config_path": f"{fake_run}/config.yaml", "events": 7}).json()
+    assert "run.tracks=7" in r["args"] and r["meta"]["source_run"] == fake_run
+    r = c.post("/api/jobs", json={"kind": "scan", "path": fake_run, "alias": "L", "points": 4}).json()
+    assert r["args"][:2] == ["optimize", "--resume"] and "--scan" in r["args"]
+    assert c.post("/api/jobs", json={"kind": "scan", "path": fake_run, "alias": "1; rm"}).status_code == 400
+
+
+def test_histogram_api(client, fake_run):
+    h = client.get("/api/run/hist", params={"path": fake_run, "name": "n_det"}).json()
+    assert h["values"] == [0, 5, 9, 3] and h["edges"][0][-1] == 40 and h["entries"] == 17
+    assert client.get("/api/run/hist", params={"path": fake_run, "name": "nope"}).status_code == 404
+
+
+def test_export_xlsx_and_zip(client, fake_run):
+    import io
+    import zipfile
+    import openpyxl
+    r = client.get("/api/export", params={"path": fake_run, "fmt": "xlsx"})
+    assert r.status_code == 200 and "spreadsheetml" in r.headers["content-type"]
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    assert {"Сводка", "Параметры", "События", "Гистограммы", "Графики"} <= set(wb.sheetnames)
+    labels = [row[0] for row in wb["Сводка"].iter_rows(values_only=True) if row[0]]
+    assert "Фотоэлектронов на кэВ" in labels
+    z = zipfile.ZipFile(io.BytesIO(client.get("/api/export", params={"path": fake_run, "fmt": "zip"}).content))
+    names = z.namelist()
+    assert any(n.endswith("README.md") for n in names) and any(n.endswith("csv/events.csv") for n in names)
+    assert "n_det" in z.read(next(n for n in names if n.endswith("README.md"))).decode()
+
+
+def test_skins():
+    for skin in ("pink", "rap"):
+        c = TestClient(create_app(DummyJobs(), skin=skin))
+        html = c.get("/").text
+        assert f"/static/themes/{skin}.css" in html and "/static/themes/skin.js" in html
+        assert c.get("/api/skin").json()["name"] == skin
+        assert c.get(f"/static/themes/{skin}.js").status_code == 200
+    with pytest.raises(ValueError):
+        create_app(DummyJobs(), skin="neon")
+    assert "themes" not in TestClient(create_app(DummyJobs())).get("/").text

@@ -187,6 +187,8 @@ ConfigMessenger::ConfigMessenger()
     L(fOut->DeclareProperty("histNScintMax", c.histNScintMax, "Upper edge of the N_scint histogram"));
     L(fOut->DeclareProperty("histNDetMax", c.histNDetMax, "Upper edge of the N_det histogram"));
     L(fOut->DeclarePropertyWithUnit("histTmax", "ns", c.histTmax, "Upper edge of the arrival time histogram"));
+    L(fOut->DeclareProperty("tracks", c.tracksEvents, "Write trajectories of the first N events to tracks.jsonl"));
+    L(fOut->DeclareProperty("tracksOpticalEvery", c.tracksOpticalEvery, "Keep every N-th optical photon track"));
 }
 
 ConfigMessenger::~ConfigMessenger()

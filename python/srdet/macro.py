@@ -178,6 +178,9 @@ def render(cfg: dict, out_dir: Path) -> str:
           f"/process/optical/scintillation/setFiniteRiseTime {_val(bool(opt['finite_rise_time']), None)}",
           f"/srdet/out/photonFraction {float(r['photon_fraction'])}",
           f"/srdet/out/cellHits {_val(bool(r['cell_hits']), None)}", f"/srdet/out/gdml {_val(bool(r['gdml']), None)}",
+          *([f"/srdet/out/tracks {int(r['tracks'])}",
+             f"/srdet/out/tracksOpticalEvery {int(r.get('tracks_optical_every', 50))}",
+             "/tracking/storeTrajectory 1"] if int(r.get("tracks", 0) or 0) > 0 else []),
           "/run/initialize",
           f"/run/setCutForRegion Detector {g4(p['cut_detector'], 'length')}",
           f"/analysis/setFileName {out_dir}/srdet"]

@@ -7,6 +7,8 @@
 
 ```bash
 docker compose up web                               # браузерный интерфейс: http://localhost:8080
+docker compose up web-pink                          # то же в розовой теме: http://localhost:8081
+docker compose up web-rap                           # то же в рэп-теме:     http://localhost:8082
 docker compose build srdet                          # Geant4 11.3.2 + приложение + Python
 docker compose run --rm srdet run full              # один прогон (кастомный режим)
 docker compose run --rm srdet study U01_coating     # автоматическое исследование
@@ -15,8 +17,12 @@ docker compose run --rm srdet optimize O01_geometry_60keV   # поиск опт�
 docker compose run --rm srdet validate --quick      # физические sanity-тесты
 ```
 
+**Новичку:** [docs/user_guide.md](docs/user_guide.md) — пошаговая инструкция со скриншотами
+(«что нажимать»), а в самой программе есть кнопка «❓ Как пользоваться».
+
 | Документ | О чём |
 |---|---|
+| [docs/user_guide.md](docs/user_guide.md) | инструкция пользователя: установка, экраны, рецепты, словарь, если что-то не так |
 | [docs/running.md](docs/running.md) | сборка, режимы запуска, вывод, бэкапы и архивы |
 | [docs/physics.md](docs/physics.md) | физ-лист, сцинтилляция, оптика, покрытия, сенсоры, проверки, ошибки legacy |
 | [docs/architecture.md](docs/architecture.md) | структура кода, поток данных, формат ntuple |

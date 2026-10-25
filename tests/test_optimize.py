@@ -156,3 +156,17 @@ def test_refine_revisits_categories(tmp_path):
     out = Optimizer(spec, evaluator=ev, out_dir=tmp_path / "opt").run()
     best = pd.read_csv(out / "final.csv").iloc[0]
     assert best["sensor"] == "aSi_FPD" and best["window"] < 0.04
+
+
+def test_scan_parameter_varies_only_one_axis(tmp_path):
+    from srdet.optimize import scan_parameter
+    spec = dict(SPEC, search=dict(SPEC["search"], initial=6, events=[100], refine=None,
+                                  final={"top": 1, "events": 200, "repeats": 1}))
+    out = Optimizer(spec, evaluator=fake_physics, out_dir=tmp_path / "opt").run()
+    best = pd.read_csv(out / "final.csv").iloc[0]
+    scan_parameter(out, "L", points=5, evaluator=fake_physics)
+    t = pd.read_csv(out / "trials.csv")
+    s = t[t["stage"] == "scan_L"]
+    assert len(s) == 5 and s["L"].nunique() == 5
+    assert s["L"].min() == pytest.approx(0.5) and s["L"].max() == pytest.approx(10)
+    assert (s["coat"] == best["coat"]).all() and np.allclose(s["wall"], best["wall"])
