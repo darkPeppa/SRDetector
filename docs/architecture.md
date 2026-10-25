@@ -22,7 +22,7 @@ configs/history/          ├── analysis: метрики, sanity-прове�
 | `configs/optimize/` | спецификации поиска оптимума O01–O03 |
 | `configs/history/` | бэкапы всех запускавшихся конфигураций |
 | `macros/` | vis-макросы и примеры ручных GPS-пучков |
-| `tools/` | сопровождение данных: XCOM, конвертация, слияние, сравнение конфигов, сбор отчётов, очистка |
+| `tools/` | сопровождение данных: XCOM, конвертация, слияние, сравнение конфигов, сбор отчётов, очистка, скриншоты UI |
 | `tests/` | `test_python.py` (без Geant4), `test_physics.py` (sanity), `data/` (NIST XCOM) |
 | `docker/`, `docker-compose.yml` | сборка Geant4 из исходников и окружения |
 | `results/` | архивы удачных прогонов и отчёты (в git) |
@@ -42,7 +42,7 @@ configs/history/          ├── analysis: метрики, sanity-прове�
 | `PhysicsList.hh/.cc` | модульный физ-лист: Livermore/option4/Penelope + Decay (+RDM) + Optical; `/srdet/phys/em` |
 | `PrimaryGeneratorAction` | GPS (все пучки) или оптическая пушка внутри канала |
 | `Actions.hh/.cc` | Stacking (учёт рождения фотонов и флуоресценции), Stepping (депозиты по типам объёмов, процессы, статусы границ, судьба фотонов) |
-| `EventAction`, `RunAction` | накопители события; ntuple `events`/`photons`/`cells`, H1/H2 с подписями, `run_summary.json` |
+| `EventAction`, `RunAction` | накопители события; ntuple `events`/`photons`/`cells`, H1/H2 с подписями, `run_summary.json`; траектории первых N событий в `tracks.jsonl` для 3D |
 
 Ключевые решения:
 
@@ -76,7 +76,9 @@ configs/history/          ├── analysis: метрики, sanity-прове�
 | `web/server.py` | FastAPI: каталоги, схема формы, задачи, прогоны, исследования, оптимизации, документы, файлы |
 | `web/jobs.py` | очередь задач (`srdet ...` в подпроцессах, по одной), журнал `runs/web_jobs/` |
 | `web/schema.py` | схема формы из `configs/defaults.yaml` (тип, единицы, подсказка, варианты из каталогов) |
-| `web/static/` | одностраничный UI: `index.html` (Alpine.js), `app.js`, `geometry.js` (SVG-геометрия), `style.css` |
+| `web/static/` | одностраничный UI: `index.html` (Alpine.js), `app.js`, `geometry.js` (SVG-геометрия), `viewer3d.js` (three.js: геометрия + треки), `tour.js` (подсказки по шагам), `style.css`, `themes/` (скины pink / rap) |
+| `export.py` | Excel (openpyxl, оформление, графики) и ZIP-пакеты для прогонов, исследований, оптимизаций |
+| `labels.py` | русские подписи метрик и порядок важных величин (веб и экспорт) |
 
 ## Ntuple `events` (одна строка на событие)
 

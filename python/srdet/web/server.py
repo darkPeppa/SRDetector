@@ -33,18 +33,7 @@ KEY_METRICS = ["e0_keV", "detection_efficiency", "photopeak_fraction", "k_escape
                "det_yield_per_keV", "resolution_fwhm_poisson_limit", "em_crosstalk", "optical_crosstalk",
                "psf_r50_um", "psf_in_cell_fraction", "mean_cells_hit", "t_det_median_ns",
                "snr_60keV_per_channel", "det_yield_per_cost", "wall_time_s"]
-METRIC_LABELS = {
-    "e0_keV": "Энергия пучка, кэВ", "detection_efficiency": "Эффективность регистрации",
-    "photopeak_fraction": "Доля фотопика", "k_escape_fraction": "Вероятность K-escape",
-    "lce": "Светосбор (с QE)", "lce_exit": "Доля света, вышедшего к сенсору",
-    "det_yield_per_keV": "Фотоэлектронов на кэВ", "resolution_fwhm_poisson_limit": "FWHM, пуассоновский предел",
-    "em_crosstalk": "ЭМ-кросс-ток", "optical_crosstalk": "Оптический кросс-ток", "psf_r50_um": "Пятно r50, мкм",
-    "psf_in_cell_fraction": "Свет в своей соте", "mean_cells_hit": "Сработавших сот",
-    "t_det_median_ns": "Медиана времени прихода, нс", "snr_60keV_per_channel": "SNR 60 кэВ / канал",
-    "det_yield_per_cost": "pe/кэВ на единицу цены", "wall_time_s": "Время счёта, с",
-    "interacting_fraction": "Доля провзаимодействовавших", "mean_n_det": "Детектированных фотонов",
-    "mean_edep_core_keV": "Энергия в ядрах, кэВ", "scint_yield_per_keV": "Сцинтилляций на кэВ",
-}
+from ..labels import METRIC_LABELS  # noqa: E402  (shared with the Excel export)
 
 
 def _clean(o: Any) -> Any:
@@ -106,15 +95,33 @@ def _run_summary(d: Path) -> dict:
             "metrics": {k: m.get(k) for k in KEY_METRICS if k in m}}
 
 
-def create_app(jobs: JobManager | None = None) -> FastAPI:
+SKINS = ("pink", "rap")
+
+
+def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastAPI:
     app = FastAPI(title="SRDetector", version=__version__)
+    if skin and skin not in SKINS:
+        raise ValueError(f"unknown skin {skin}; available: {', '.join(SKINS)}")
     jm = jobs or JobManager()
     app.state.jobs = jm
 
     # ---------------- static UI and files
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return (STATIC / "index.html").read_text()
+        html = (STATIC / "index.html").read_text()
+        if skin:  # decorative skin: own stylesheet + vocabulary, applied by themes/skin.js
+            html = html.replace("</head>", f'<link rel="stylesheet" href="/static/themes/{skin}.css">\n'
+                                f'<script src="/static/themes/{skin}.js"></script>\n'
+                                f'<script src="/static/themes/skin.js"></script>\n</head>')
+        return html
+
+    @app.get("/api/skin")
+    def skin_info():
+        if not skin:
+            return {"name": None, "images": []}
+        d = STATIC / "themes" / skin / "user"
+        imgs = sorted(p for p in d.glob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif"))
+        return {"name": skin, "images": [f"/static/themes/{skin}/user/{p.name}" for p in imgs]}
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -207,6 +214,23 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             sets = [a for k, v in (body.get("overrides") or {}).items() for a in ("--set", f"{k}={v}")]
             args = [kind, target, *quick, *archive, *sets]
             title = f"{kind}: {target}{' (quick)' if quick else ''}"
+        elif kind == "tracks":  # short re-run of a run's configuration that stores trajectories for 3D
+            cfg_path = _safe(body["config_path"])
+            n = max(1, min(int(body.get("events", 20)), 500))
+            src = str(Path(body["config_path"]).parent)
+            args = ["run", str(cfg_path), "--events", str(n), "--set", f"run.tracks={n}",
+                    "--name", re.sub(r"^\d{8}-\d{6}_", "", Path(src).name)[:40] + "_3d"]
+            meta["source_run"] = src
+            title = f"3D-треки: {Path(src).name}"
+        elif kind == "scan":
+            d = _safe(body["path"])
+            alias = body.get("alias", "")
+            if not re.fullmatch(r"[A-Za-z_]\w*", alias):
+                raise HTTPException(400, "alias required")
+            args = ["optimize", "--resume", str(d), "--scan", alias, "--points", str(int(body.get("points", 6)))]
+            if body.get("events"):
+                args += ["--events", str(int(body["events"]))]
+            title = f"scan {alias}: {d.name}"
         elif kind == "validate":
             args = ["validate", *quick]
             title = f"physics validation{' (quick)' if quick else ''}"
@@ -236,7 +260,9 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
     @app.get("/api/runs")
     def runs(limit: int = 200):
         base = runs_dir()
-        dirs = [d for d in base.glob("*") if d.is_dir() and d.name not in SKIP_RUN_DIRS]
+        root = repo_root().resolve()
+        dirs = [d for d in base.glob("*") if d.is_dir() and d.name not in SKIP_RUN_DIRS
+                and d.resolve().is_relative_to(root)]  # only folders the file API may serve
         dirs.sort(key=lambda d: d.name, reverse=True)
         return _clean([_run_summary(d) for d in dirs[:limit]])
 
@@ -247,6 +273,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         vis = [v for v in json.loads((d / "vis.json").read_text())] if (d / "vis.json").exists() else []
         vis_plots = [p for v in vis if (repo_root() / v).exists() for p in _plots(repo_root() / v)
                      if not p["path"].count("/plots/")]
+        tracks = [d / "tracks.jsonl"] + [repo_root() / v / "tracks.jsonl" for v in reversed(vis)]
+        tracks_src = next((t for t in tracks if t.exists()), None)
         files = [{"path": _rel(f), "size": f.stat().st_size} for f in sorted(d.iterdir()) if f.is_file()]
         cfg = yaml.safe_load((d / "config.yaml").read_text()) if (d / "config.yaml").exists() else {}
         return _clean({**_run_summary(d), "metrics_all": {k: v for k, v in m.items()
@@ -259,6 +287,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                        "plots": [p for p in _plots(d) if "/plots/" in p["path"]],
                        "pictures": [p for p in _plots(d) if "/plots/" not in p["path"]] + vis_plots,
                        "files": files, "has_root": (d / "srdet.root").exists(),
+                       "tracks_run": _rel(tracks_src.parent) if tracks_src else None,
                        "log_tail": "\n".join((d / "log.txt").read_text(errors="replace").splitlines()[-60:])
                        if (d / "log.txt").exists() else ""})
 
@@ -270,6 +299,20 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             raise HTTPException(404, "no geometry.json")
         cfg = yaml.safe_load((d / "config.yaml").read_text()) if (d / "config.yaml").exists() else {}
         return _clean({**g, "config_geometry": cfg.get("geometry", {}), "config_optics": cfg.get("optics", {})})
+
+    @app.get("/api/run/hist")
+    def run_hist(path: str = Query(...), name: str = Query(...)):
+        """One histogram of srdet.root as arrays (for overlays in the UI)."""
+        import uproot
+        d = _safe(path)
+        f = uproot.open(d / "srdet.root")
+        if name not in [k.split(";")[0] for k in f.keys()]:
+            raise HTTPException(404, f"no histogram {name}")
+        h = f[name]
+        vals, *edges = h.to_numpy()
+        axes = [str(h.member(a).member("fTitle")) for a in ("fXaxis", "fYaxis") if h.has_member(a)]
+        return _clean({"name": name, "title": h.title, "axes": axes, "values": vals.tolist(),
+                       "edges": [e.tolist() for e in edges], "entries": float(vals.sum())})
 
     @app.post("/api/compare")
     def compare(body: dict = Body(...)):
@@ -349,6 +392,18 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                        "plots": _plots(d)})
 
     # ---------------- results archive + docs
+    @app.get("/api/export")
+    def export_dir(path: str = Query(...), fmt: str = "xlsx"):
+        """Readable download of a run / study / optimisation (built on demand into <dir>/export/)."""
+        from ..export import export
+        if fmt not in ("xlsx", "zip"):
+            raise HTTPException(400, "fmt: xlsx | zip")
+        d = _safe(path)
+        out = export(d, fmt)
+        media = "application/zip" if fmt == "zip" else \
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        return FileResponse(out, media_type=media, filename=out.name)
+
     @app.get("/api/archives")
     def archives():
         res = repo_root() / "results"
@@ -358,7 +413,9 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
     @app.get("/api/docs")
     def docs():
         items = [{"path": "README.md", "title": "README"}]
-        for p in sorted((repo_root() / "docs").glob("*.md")):
+        guide = repo_root() / "docs" / "user_guide.md"
+        docs_md = sorted((repo_root() / "docs").glob("*.md"), key=lambda p: (p != guide, p.name))
+        for p in docs_md:
             first = next((l for l in p.read_text().splitlines() if l.startswith("# ")), p.stem)
             items.append({"path": _rel(p), "title": first.lstrip("# ").strip()})
         items.append({"path": "legacy/README.md", "title": "Legacy"})
@@ -380,6 +437,6 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
     return app
 
 
-def main(host: str = "0.0.0.0", port: int = 8080):
+def main(host: str = "0.0.0.0", port: int = 8080, skin: str | None = None):
     import uvicorn
-    uvicorn.run(create_app(), host=host, port=port, log_level="info")
+    uvicorn.run(create_app(skin=skin), host=host, port=port, log_level="info")

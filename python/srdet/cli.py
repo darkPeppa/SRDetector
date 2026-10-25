@@ -5,8 +5,10 @@
   srdet study --list | srdet study all [--quick]
   srdet optimize NAME [--quick] [--resume DIR] [--archive]         search optimal parameters (configs/optimize)
   srdet optimize --list
+  srdet optimize --resume DIR --scan L --points 6                  one-parameter scan around the best point
   srdet analyze RUN_DIR                                             (re)compute metrics + plots
   srdet compare RUN_DIR RUN_DIR ...                                 table of metrics
+  srdet export DIR [--format xlsx|zip]                              Excel / ZIP for people
   srdet archive RUN_OR_STUDY_DIR                                    pack into results/ for git
   srdet list                                                        recent runs and their status
   srdet catalog [materials|coatings|sensors]                        what can be configured
@@ -80,6 +82,13 @@ def cmd_study(args) -> int:
 def cmd_optimize(args) -> int:
     from .archive import pack
     from .optimize import load_spec, run_optimization, spec_files
+    if args.scan:
+        from .optimize import scan_parameter
+        if not args.resume:
+            raise SystemExit("--scan needs --resume <optimisation folder>")
+        d = scan_parameter(Path(args.resume), args.scan, points=args.points, events=args.events)
+        print(f"[srdet] optimize done: {d / 'report.md'}")
+        return 0
     if args.list or not args.name:
         for k in spec_files():
             print(f"{k:28s} {load_spec(k).get('title', '')}")
@@ -124,6 +133,13 @@ def cmd_compare(args) -> int:
     print(df[cols].T.to_markdown(floatfmt=".4g"))
     if args.out:
         df.to_csv(args.out)
+    return 0
+
+
+def cmd_export(args) -> int:
+    from .export import export
+    for p in args.paths:
+        print(f"[srdet] export -> {export(p, args.format)}")
     return 0
 
 
@@ -173,6 +189,7 @@ def cmd_vis(args) -> int:
     cfg = _cfg(args)
     cfg["run"]["events"] = args.events
     cfg["run"]["threads"] = 1
+    cfg["run"]["tracks"] = args.events  # also export the trajectories for the 3D viewer of the web UI
     from .macro import detector_radius
     from .paths import repo_root
     vis = repo_root() / "macros" / "vis"
@@ -207,8 +224,8 @@ buildGUI('gui').then(h => h.openRootFile('{p.name}'));
 
 def cmd_web(args) -> int:
     from .web.server import main as serve
-    print(f"[srdet] web UI on http://localhost:{args.port}")
-    serve(args.host, args.port)
+    print(f"[srdet] web UI on http://localhost:{args.port}" + (f" (skin: {args.skin})" if args.skin else ""))
+    serve(args.host, args.port, args.skin)
     return 0
 
 
@@ -255,6 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--list", action="store_true")
     p.add_argument("--quick", action="store_true", help="tiny budget (smoke test)")
     p.add_argument("--resume", help="continue a previous optimisation folder (finished trials are reused)")
+    p.add_argument("--scan", help="vary only this parameter over its range around the best point (with --resume)")
+    p.add_argument("--points", type=int, default=6, help="--scan: number of values for a continuous parameter")
+    p.add_argument("--events", type=int, help="--scan: events per simulation (default: as the best trial)")
     p.add_argument("--archive", action="store_true")
     p.add_argument("--set", action="append", default=[], help="override of the base config")
     p.set_defaults(fn=cmd_optimize)
@@ -268,6 +288,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--metrics")
     p.add_argument("--out")
     p.set_defaults(fn=cmd_compare)
+
+    p = sub.add_parser("export", help="readable export: Excel with labels and plots, or a ZIP bundle")
+    p.add_argument("paths", nargs="+")
+    p.add_argument("--format", choices=["xlsx", "zip"], default="xlsx")
+    p.set_defaults(fn=cmd_export)
 
     p = sub.add_parser("archive", help="pack successful runs/studies into results/")
     p.add_argument("paths", nargs="+")
@@ -300,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("web", help="browser UI")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--skin", choices=["pink", "rap"], help="decorative skin (same functionality)")
     p.set_defaults(fn=cmd_web)
 
     p = sub.add_parser("shell", help="interactive Geant4 terminal")

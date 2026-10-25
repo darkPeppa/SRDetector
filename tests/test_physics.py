@@ -262,3 +262,16 @@ def test_lattice_geometry(simulate):
     expected = math.pi * (g["matrix_radius_mm"] - rc) ** 2 / (math.sqrt(3) / 2 * p ** 2)
     assert abs(len(cells) / expected - 1) < 0.03
     assert g["n_cells"] == len(cells)
+
+
+def test_track_export(simulate):
+    """run.tracks=N writes N JSON lines with the trajectories (3D viewer of the web UI)."""
+    run, _, _ = simulate("unit_xray.yaml", {"run.events": 5, "run.tracks": 3, "materials.yield_scale": 0.01},
+                         "tracks")
+    lines = (run.path / "tracks.jsonl").read_text().splitlines()
+    assert len(lines) == 3
+    ev = json.loads(lines[0])
+    prim = next(t for t in ev["tracks"] if t["parent"] == 0)
+    assert prim["pdg"] == 22 and len(prim["pts"]) >= 2
+    z0 = prim["pts"][0][2]
+    assert z0 < 0  # the beam starts in front of the detector and flies along +z

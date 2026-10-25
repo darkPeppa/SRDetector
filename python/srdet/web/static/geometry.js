@@ -80,7 +80,7 @@ const Geo = (() => {
         <line x1="${f(-rCore)}" y1="${f(-p * 0.55)}" x2="${f(-rCore)}" y2="${f(-p * 0.1)}" stroke-dasharray="${f(sw * 4)}"/>
         <line x1="${f(rCore)}" y1="${f(-p * 0.55)}" x2="${f(rCore)}" y2="${f(-p * 0.1)}" stroke-dasharray="${f(sw * 4)}"/>
       </g>
-      <g fill="var(--text)" font-size="${f(fs)}" font-family="sans-serif">
+      <g fill="var(--text)" font-size="${f(fs)}" font-family="sans-serif" paint-order="stroke" stroke="var(--panel)" stroke-width="${f(fs / 4)}" stroke-linejoin="round">
         <text x="${f(ax * 0.55)}" y="${f(ay * 0.5 - fs * 0.4)}">шаг ${um(p)}</text>
         <text x="${f(-rCore)}" y="${f(-p * 0.67)}">D = ${um(g.D)}</text>
         <text x="${f(-m * 0.96)}" y="${f(m * 0.86)}">стенка (мин.) ${um(Math.max(wall, 0))}${t > 0 ? ', покрытие ' + um(t) : ''}</text>

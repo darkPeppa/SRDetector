@@ -34,7 +34,11 @@ docker compose --profile root build root
 
 ```bash
 docker compose up web        # http://localhost:8080   (порт меняется: SRDET_WEB_PORT=9000)
+docker compose up web-pink   # http://localhost:8081   розовая тема
+docker compose up web-rap    # http://localhost:8082   рэп-тема
 ```
+
+Пошаговая инструкция со скриншотами: [user_guide.md](user_guide.md).
 
 В браузере доступно всё то же, что в CLI: форма конфигурации с предпросмотром геометрии, запуск
 прогонов, исследований и оптимизаций, графики и метрики, 3D-картинки Geant4, ROOT-браузер,
@@ -108,6 +112,8 @@ srdet optimize O02 --quick
 srdet analyze runs/<run>            # пересчитать metrics.json и графики
 srdet analyze runs/studies/<study>  # пересобрать report.md
 srdet compare runs/A runs/B         # таблица метрик
+srdet export runs/<run>             # Excel с подписями и графиками -> runs/<run>/export/
+srdet export runs/<run> --format zip   # ZIP: Excel + CSV + Parquet + PNG + конфиги + README
 srdet archive runs/<run>            # results/<run>.tar.xz (≤ 45 МБ, проверка размера)
 srdet list                          # последние прогоны и их статус
 srdet catalog coatings              # что можно выбрать (materials | coatings | sensors)

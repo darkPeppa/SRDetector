@@ -117,7 +117,7 @@ class JobManager:
     def _after(self, job: dict):
         """Link geometry pictures back to the run they were made for."""
         src, res = job["meta"].get("source_run"), job.get("result")
-        if job["kind"] == "vis" and src and res and job["status"] == "done":
+        if job["kind"] in ("vis", "tracks") and src and res and job["status"] == "done":
             f = repo_root() / src / "vis.json"
             links = json.loads(f.read_text()) if f.exists() else []
             links.append(res)

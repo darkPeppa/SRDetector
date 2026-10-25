@@ -7,7 +7,11 @@
 <link rel="stylesheet" href="/static/style.css">
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module" src="/static/viewer3d.js"></script>
 <script src="/static/geometry.js"></script>
+<script src="/static/tour.js"></script>
 <script src="/static/app.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
@@ -28,6 +32,8 @@
       </a>
     </template>
   </nav>
+  <a class="tour-start" href="#" @click.prevent="tourStart($data)">❓ Как пользоваться</a>
+  <a class="tour-start" href="#/docs?path=docs/user_guide.md">📘 Инструкция</a>
   <div class="foot">
     <div x-text="'srdet ' + (info.version || '')"></div>
     <a href="#" @click.prevent="toggleTheme()">тема: <span x-text="theme"></span></a>
@@ -182,6 +188,7 @@
           <button class="btn primary" :disabled="!!geoPreview().problem" @click="launchRun(false)">▶ Запустить</button>
           <button class="btn" :disabled="!!geoPreview().problem" @click="launchRun(true)">▶ + 3D-картинки</button>
           <label class="row small"><input type="checkbox" x-model="form.archive"> в архив results/</label>
+          <label class="row small"><input type="checkbox" x-model="form.tracks3d"> треки для 3D (первые 20 событий)</label>
         </div>
       </div>
     </div>
@@ -205,11 +212,13 @@
       <div class="spacer"></div>
       <button class="btn" @click="visFor(run.path + '/config.yaml', run.path)">🧊 3D-картинки геометрии</button>
       <button class="btn" @click="rerunInForm(run)">✎ Повторить с изменениями</button>
+      <a class="btn" :href="'/api/export?fmt=xlsx&path=' + encodeURIComponent(run.path)">⬇ Excel</a>
+      <a class="btn" :href="'/api/export?fmt=zip&path=' + encodeURIComponent(run.path)">⬇ ZIP-пакет</a>
       <button class="btn" @click="submit({kind:'archive', path: run.path})">В архив</button>
     </div>
     <div class="small muted" style="margin:-10px 0 12px" x-text="[run.mode, 'L=' + run.length, run.core, run.coating, run.sensor, run.beam].filter(Boolean).join(' · ')"></div>
     <div class="tabs">
-      <template x-for="t in ['обзор','графики','геометрия','ROOT','конфиг','файлы','лог']"><a :class="{active: runTab === t}" @click="setRunTab(t)" x-text="t"></a></template>
+      <template x-for="t in ['обзор','графики','3D','геометрия','ROOT','конфиг','файлы','лог']"><a :class="{active: runTab === t}" @click="setRunTab(t)" x-text="t"></a></template>
     </div>
 
     <div x-show="runTab === 'обзор'">
@@ -245,9 +254,61 @@
         <div class="empty" x-show="!run.pictures.length">Ещё нет — нажмите «3D-картинки геометрии» (несколько событий с треками)</div></div>
     </div>
 
+    <div x-show="runTab === '3D'">
+      <div class="card">
+        <h2>Моделирование в 3D <span class="small muted" x-show="run.tracks_run" x-text="'треки из ' + run.tracks_run"></span></h2>
+        <div x-show="!run.tracks_run">
+          <div class="sub">У этого прогона нет сохранённых треков. Запустите короткое моделирование с той же конфигурацией —
+            Geant4 запишет траектории частиц (γ, электроны, часть оптических фотонов), и они появятся здесь.</div>
+          <div class="row"><span class="small muted">событий</span><input type="number" min="1" max="500" style="width:90px" x-model.number="tracksN">
+            <button class="btn primary" @click="submit({kind: 'tracks', config_path: run.path + '/config.yaml', events: tracksN})">▶ Смоделировать для 3D</button></div>
+        </div>
+        <div x-show="run.tracks_run">
+          <div class="row" style="margin-bottom:8px">
+            <span class="small muted">событие</span>
+            <select style="width:150px" x-model="v3dEvent" @change="v3d && v3d.setEvent(v3dEvent === 'all' ? null : +v3dEvent); v3dCounts = v3d ? v3d.counts() : {}">
+              <option value="all">все</option><template x-for="e in v3dEvents"><option :value="e.evt" x-text="'#' + e.evt + ' · ' + fmt(e.e0_keV) + ' кэВ'"></option></template></select>
+            <template x-for="[k, p] in Object.entries(v3dParticles)"><label class="row small">
+              <input type="checkbox" checked @change="v3d && v3d.setVisible(k, $event.target.checked)">
+              <span :style="'color:#' + p.color.toString(16).padStart(6, '0')" x-text="p.label + ' (' + (v3dCounts[k] || 0) + ')'"></span></label></template>
+            <span class="small muted">соты</span><input type="range" min="0" max="0.6" step="0.02" value="0.2" style="width:110px" @input="v3d && v3d.setCellOpacity(+$event.target.value)">
+            <label class="row small"><input type="checkbox" :checked="v3dAllCells" @change="v3dAllCells = $event.target.checked; v3d && v3d.setAllCells(v3dAllCells)">
+              <span x-text="'все соты' + (v3dCellInfo.total ? ' (' + v3dCellInfo.total.toLocaleString('ru-RU') + '; задето ' + v3dCellInfo.touched + ')' : '')"></span></label>
+            <button class="btn sm" @click="v3d && v3d.animate()">▶ анимация</button>
+            <button class="btn sm" @click="v3d && v3d.view('front')">с пучка</button>
+            <button class="btn sm" @click="v3d && v3d.view('side')">сбоку</button>
+            <button class="btn sm" @click="v3d && v3d.view('iso')">3/4</button>
+            <button class="btn sm" @click="saveShot()">📷 PNG</button>
+          </div>
+          <div x-ref="v3d" style="height:600px;border-radius:10px;overflow:hidden;border:1px solid var(--border)"></div>
+          <div class="small muted" style="margin-top:6px">Мышь: левая кнопка — вращать, колесо — масштаб, правая — сдвиг.
+            Оптических фотонов показан каждый N-й (run.tracks_optical_every). Пучок летит вдоль +z, сенсор — синий диск сзади.</div>
+        </div>
+      </div>
+    </div>
+
     <div x-show="runTab === 'ROOT'">
-      <div class="card"><h2>Интерактивный ROOT-браузер (JSROOT)</h2><div class="sub">Гистограммы и ntuple из srdet.root; двойной клик по объекту — нарисовать</div>
-        <div class="jsroot" x-ref="jsroot"></div></div>
+      <div class="card"><h2>Интерактивный ROOT-браузер (JSROOT)</h2>
+        <div class="sub">Объекты srdet.root: гистограммы рисуются как есть; для деревьев (TTree) введите выражение как в TTree::Draw — <code>n_det</code>, <code>edep_core_keV:n_det</code>, <code>lambda_nm</code> — и, если нужно, условие отбора (<code>first_proc==1</code>, <code>edep_core_keV>50</code>).</div>
+        <div class="muted small" x-show="rootMsg" x-text="rootMsg"></div>
+        <div class="split" style="grid-template-columns: 230px 1fr">
+          <div class="scroll" style="max-height:640px">
+            <template x-for="k in rootKeys" :key="k.name">
+              <div style="padding:4px 6px;border-radius:6px;cursor:pointer" :style="rootSel === k.name ? 'background:var(--panel-2);font-weight:600' : ''" @click="drawRoot(k.name)">
+                <span class="badge" x-text="k.cls"></span> <span x-text="k.name"></span>
+                <div class="small muted" x-text="k.title"></div></div>
+            </template>
+          </div>
+          <div>
+            <div class="row" x-show="(rootKeys.find(k => k.name === rootSel) || {}).cls === 'TTree'" style="margin-bottom:8px">
+              <input style="flex:2" x-model="rootExpr" placeholder="выражение, напр. edep_core_keV:n_det" @keydown.enter="drawRoot(rootSel, rootExpr)">
+              <input style="flex:1" x-model="rootCut" placeholder="условие (необязательно)" @keydown.enter="drawRoot(rootSel, rootExpr)">
+              <button class="btn sm primary" @click="drawRoot(rootSel, rootExpr)">нарисовать</button>
+            </div>
+            <div class="jsroot" x-ref="jsroot"></div>
+          </div>
+        </div>
+        <div class="small" style="margin-top:8px"><a :href="'/files/' + run.path + '/srdet.root'" download>скачать srdet.root</a> · локально: <code x-text="'srdet jsroot ' + run.path + '/srdet.root'"></code></div></div>
     </div>
 
     <div x-show="runTab === 'конфиг'" class="grid g2">
@@ -255,8 +316,12 @@
       <div class="card"><h2>run.mac</h2><pre x-text="run.macro"></pre></div>
     </div>
     <div x-show="runTab === 'файлы'" class="card"><table class="t"><tbody>
-      <template x-for="f in run.files"><tr><td><a :href="'/files/' + f.path" x-text="f.path.split('/').pop()" target="_blank"></a></td><td class="num muted" x-text="(f.size/1024).toFixed(1) + ' КБ'"></td></tr></template>
-    </tbody></table></div>
+      <template x-for="f in run.files"><tr><td><a :href="'/files/' + f.path" x-text="f.path.split('/').pop()" target="_blank"></a></td>
+        <td class="small muted" x-text="fileHelp(f.path)"></td>
+        <td class="num muted" x-text="(f.size/1024).toFixed(1) + ' КБ'"></td>
+        <td><a class="btn sm" :href="'/files/' + f.path" download>скачать</a></td></tr></template>
+    </tbody></table>
+    <div class="row" style="margin-top:10px"><a class="btn primary" :href="'/api/export?fmt=zip&path=' + encodeURIComponent(run.path)">⬇ Скачать всё одним ZIP (с Excel и README)</a></div></div>
     <div x-show="runTab === 'лог'" class="card"><pre class="log" x-text="run.log_tail"></pre></div>
   </div>
   </template>
@@ -297,11 +362,13 @@
 <section x-show="route.view === 'study'">
   <template x-if="study">
   <div>
-    <div class="topbar"><h1 x-text="(study.spec && study.spec.title) || study.path"></h1></div>
+    <div class="topbar"><h1 x-text="(study.spec && study.spec.title) || study.path"></h1><div class="spacer"></div>
+      <a class="btn" :href="'/api/export?fmt=xlsx&path=' + encodeURIComponent(study.path)">⬇ Excel</a>
+      <a class="btn" :href="'/api/export?fmt=zip&path=' + encodeURIComponent(study.path)">⬇ ZIP-пакет</a></div>
     <div class="card" x-show="study.rows.length"><h2>Интерактивный график</h2>
-      <div class="row"><span class="small muted">x:</span><select style="width:220px" x-model="studyX" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="c"></option></template></select>
-        <span class="small muted">y:</span><select style="width:260px" x-model="studyY" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="label(c) + ' (' + c + ')'"></option></template></select>
-        <span class="small muted">серии:</span><select style="width:200px" x-model="studySeries" @change="drawStudy()"><option value="">—</option><template x-for="c in studyCols()"><option :value="c" x-text="c"></option></template></select></div>
+      <div class="row"><span class="small muted">x:</span><select style="width:220px" x-model="studyX" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="c" :selected="c === studyX"></option></template></select>
+        <span class="small muted">y:</span><select style="width:260px" x-model="studyY" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="label(c) + ' (' + c + ')'" :selected="c === studyY"></option></template></select>
+        <span class="small muted">серии:</span><select style="width:200px" x-model="studySeries" @change="drawStudy()"><option value="">—</option><template x-for="c in studyCols()"><option :value="c" x-text="c" :selected="c === studySeries"></option></template></select></div>
       <div class="plot" x-ref="studyplot"></div></div>
     <div class="card md" style="margin-top:14px" x-html="renderMd(study.report, study.path + '/report.md')"></div>
   </div>
@@ -336,7 +403,9 @@
     <div class="topbar"><h1 x-text="opt.spec.title || opt.path"></h1><div class="spacer"></div>
       <button class="btn primary" x-show="opt.best_path" @click="submit({kind:'run', config_path: opt.best_path, name: opt.spec.name + '_best'})">▶ Прогнать лучшую</button>
       <button class="btn" x-show="opt.best_path" @click="submit({kind:'vis', config_path: opt.best_path})">🧊 3D лучшей</button>
-      <a class="btn" x-show="opt.best_path" :href="'/files/' + opt.best_path" download>best.yaml</a></div>
+      <a class="btn" x-show="opt.best_path" :href="'/files/' + opt.best_path" download>best.yaml</a>
+      <a class="btn" :href="'/api/export?fmt=xlsx&path=' + encodeURIComponent(opt.path)">⬇ Excel</a>
+      <a class="btn" :href="'/api/export?fmt=zip&path=' + encodeURIComponent(opt.path)">⬇ ZIP</a></div>
     <div class="grid g4">
       <div class="card kpi"><span class="v" x-text="optBest() ? fmt(optBest().objective) : '—'"></span><span class="l">цель (± <span x-text="optBest() ? fmt(optBest().objective_std) : '—'"></span>) — <code x-text="opt.spec.objective && opt.spec.objective.expr"></code></span></div>
       <div class="card kpi"><span class="v" x-text="opt.trials.length"></span><span class="l">испытаний, допустимых <span x-text="opt.trials.filter(t => t.feasible).length"></span></span></div>
@@ -344,7 +413,39 @@
       <div class="card"><div class="small muted">ограничения</div><template x-for="c in (opt.spec.constraints || [])"><span class="chip" x-text="c"></span></template></div>
     </div>
     <div class="tabs" style="margin-top:14px">
-      <template x-for="t in ['дашборд','испытания','геометрия лучшей','отчёт']"><a :class="{active: optTab === t}" @click="setOptTab(t)" x-text="t"></a></template>
+      <template x-for="t in ['параметр → гистограммы','дашборд','испытания','геометрия лучшей','отчёт']"><a :class="{active: optTab === t}" @click="setOptTab(t)" x-text="t"></a></template>
+    </div>
+    <div x-show="optTab === 'параметр → гистограммы'">
+      <div class="card" style="margin-bottom:14px">
+        <h2>Как меняется результат, если менять один параметр</h2>
+        <div class="sub">Выберите параметр и величину. Каждая линия — отдельная симуляция с подписанным значением параметра,
+          остальные параметры по возможности равны лучшей найденной точке (такие точки даёт шаг уточнения оптимизатора).
+          Справа — итоговая метрика тех же симуляций.</div>
+        <div class="row">
+          <span class="small muted">параметр</span>
+          <select style="width:170px" x-model="scanParam" @change="drawScan()"><template x-for="a in optAliases()"><option :value="a" x-text="a" :selected="a === scanParam"></option></template></select>
+          <span class="small muted">гистограмма</span>
+          <select style="width:300px" x-model="scanHist" @change="drawScan()"><template x-for="[k, v] in Object.entries(HIST_LABELS)"><option :value="k" x-text="v" :selected="k === scanHist"></option></template></select>
+          <span class="small muted">метрика</span>
+          <select style="width:240px" x-model="scanMetric" @change="drawScan()"><template x-for="m in scanMetrics()"><option :value="m" x-text="label(m)" :selected="m === scanMetric"></option></template></select>
+          <label class="row small"><input type="checkbox" x-model="scanNorm" @change="drawScan()"> нормировать (форма)</label>
+          <label class="row small"><input type="checkbox" x-model="scanLog" @change="drawScan()"> лог. шкала</label>
+          <label class="row small"><input type="checkbox" x-model="scanNoZero" @change="drawScan()"> без нулевого бина</label>
+        </div>
+        <div class="warnbox" style="margin-top:8px" x-show="scanNote" x-text="scanNote"></div>
+        <div class="row" style="margin-top:10px">
+          <span class="small muted" x-text="'точек по ' + scanParam + ': ' + scanTrials(scanParam).rows.length"></span>
+          <button class="btn sm primary" @click="submit({kind: 'scan', path: opt.path, alias: scanParam, points: scanPoints})">
+            Досчитать скан «<span x-text="scanParam"></span>» по всему диапазону</button>
+          <span class="small muted">точек</span><input type="number" min="2" max="20" style="width:70px" x-model.number="scanPoints">
+          <span class="small muted">остальные параметры = лучшая точка; результат добавится сюда же</span>
+        </div>
+      </div>
+      <div class="split">
+        <div class="card"><h2 x-text="HIST_LABELS[scanHist]"></h2><div class="plot" x-ref="scanhist" style="min-height:440px"></div></div>
+        <div class="card"><h2 x-text="label(scanMetric) + ' от ' + scanParam"></h2><div class="plot" x-ref="scanmetric" style="min-height:440px"></div>
+          <div class="small muted" x-text="scanSummary"></div></div>
+      </div>
     </div>
     <div x-show="optTab === 'дашборд'">
       <div class="grid g2">
@@ -353,7 +454,7 @@
       </div>
       <div class="card" style="margin-top:14px"><h2>Параллельные координаты</h2><div class="sub">допустимые испытания; цвет — цель; можно выделять диапазоны на осях</div><div class="plot" x-ref="optpar" style="min-height:420px"></div></div>
       <div class="card" style="margin-top:14px"><h2>Чувствительность
-          <select style="width:200px;margin-left:auto" x-model="optParam" @change="drawOptSens()"><template x-for="a in optAliases()"><option :value="a" x-text="a"></option></template></select></h2>
+          <select style="width:200px;margin-left:auto" x-model="optParam" @change="drawOptSens()"><template x-for="a in optAliases()"><option :value="a" x-text="a" :selected="a === optParam"></option></template></select></h2>
         <div class="plot" x-ref="optsens"></div></div>
       <div class="card" style="margin-top:14px" x-show="opt.final.length"><h2>Проверенные кандидаты (среднее ± σ по повторам)</h2>
         <div class="scroll"><table class="t"><thead><tr><template x-for="c in finalCols()"><th x-text="c"></th></template></tr></thead>
