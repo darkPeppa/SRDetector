@@ -44,6 +44,9 @@ jobs:
         run: |
           docker run --rm -e SRDET_QUICK=1 -e SRDET_KEEP_TEST_RUNS=1 -v "$PWD":/work srdet:ci \
             pytest -v -x /work/tests --junitxml=/work/test-results.xml
+      - name: Failed tests as annotations
+        if: failure()
+        run: python3 tools/junit_annotations.py test-results.xml || true
       - name: Quick study smoke test
         run: docker run --rm -v "$PWD":/work srdet:ci study U02_reflectivity --quick
       - uses: actions/upload-artifact@v4
