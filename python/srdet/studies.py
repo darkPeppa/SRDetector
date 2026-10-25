@@ -111,6 +111,24 @@ def _ref_reflectivity(df: pd.DataFrame, x: str, sdir: Path):
 REFERENCES = {"reflectivity": _ref_reflectivity}
 
 
+def derived_metrics(study: dict, row: dict) -> dict:
+    """`derived: {name: expression}` of a study: metrics combined per point (same expression rules
+    as in the optimisation specs); a missing input gives NaN."""
+    from .optimize import safe_eval
+    names = {k: v for k, v in row.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    out = {}
+    for name, expr in (study.get("derived") or {}).items():
+        try:
+            out[name] = float(safe_eval(expr, names))
+        except (NameError, ArithmeticError, ValueError, TypeError):
+            out[name] = float("nan")
+    return out
+
+
+EXPLAIN_TITLES = [("question", "Вопрос"), ("why", "Почему именно так"), ("expect", "Чего ожидаем"),
+                  ("read", "Как читать результат")]
+
+
 def run_study(name_or_path: str, quick: bool = False, analyze_only: Path | None = None,
               extra_sets: list[str] | None = None) -> Path:
     study = load_study(name_or_path)
@@ -159,6 +177,7 @@ def run_study(name_or_path: str, quick: bool = False, analyze_only: Path | None 
             row[study.get("x") or keys_of(study)[0]] = study["x_names"][i]
         row.update({"run_dir": str(rdir.relative_to(sdir)), "ok": ok})
         row.update({k: v for k, v in m.items() if not isinstance(v, (list, dict))})
+        row.update(derived_metrics(study, row))
         rows.append(row)
 
     pd.DataFrame(rows).to_csv(sdir / "results.csv", index=False)
@@ -198,9 +217,13 @@ def write_report(study: dict, df: pd.DataFrame, sdir: Path) -> Path:
     table = good[cols].to_markdown(index=False, floatfmt=".4g") if cols and len(good) else "(no successful runs)"
     (sdir / "results.md").write_text(table + "\n")
 
-    lines = [f"# {study.get('title', study['name'])}", "", study.get("description", "").strip(), "",
-             f"Base configuration: `{study.get('base')}`; fixed overrides: `{study.get('set') or {}}`", "",
-             "## Results", "", table, ""]
+    lines = [f"# {study.get('title', study['name'])}", "", str(study.get("description") or "").strip(), ""]
+    explain = study.get("explain") or {}
+    if explain:
+        lines += ["## Зачем это исследование", ""]
+        lines += [f"**{title}.** {str(explain[k]).strip()}" + "\n" for k, title in EXPLAIN_TITLES if explain.get(k)]
+    lines += [f"Base configuration: `{study.get('base')}`; fixed overrides: `{study.get('set') or {}}`", "",
+              "## Results", "", table, ""]
     for p in plots:
         lines += [f"![{p.stem}](plots/{p.name})", ""]
     lines += ["## Automatic observations", ""] + observations(study, good, x, metrics)
@@ -216,6 +239,14 @@ def observations(study: dict, df: pd.DataFrame, x: str | None, metrics: list[str
     out = []
     if not x or not len(df):
         return out
+    series = study.get("series")
+    if series and series in df and series != x:
+        # one block per curve: mixing the series would hide the trend of each of them
+        for value, grp in df.groupby(series, sort=False):
+            sub = observations({k: v for k, v in study.items() if k != "series"}, grp, x, metrics)
+            if sub:
+                out += [f"- *{series} = {value}*"] + ["  " + line for line in sub]
+        return out
     for met in metrics:
         if met not in df or df[met].isna().all():
             continue
@@ -225,7 +256,8 @@ def observations(study: dict, df: pd.DataFrame, x: str | None, metrics: list[str
         out.append(f"- **{study.get('labels', {}).get(met, met)}**: max {best[met]:.4g} at {x} = {best[x]}, "
                    f"min {worst[met]:.4g} at {x} = {worst[x]} (ratio {best[met] / worst[met]:.3g})"
                    if worst[met] not in (0, 0.0) else
-                   f"- **{met}**: max {best[met]:.4g} at {x} = {best[x]}, min 0 at {x} = {worst[x]}")
+                   f"- **{study.get('labels', {}).get(met, met)}**: max {best[met]:.4g} at {x} = {best[x]}, "
+                   f"min 0 at {x} = {worst[x]}")
         xv = pd.to_numeric(s[x], errors="coerce")
         if xv.notna().all() and len(s) >= 3:
             rho = np.corrcoef(xv, s[met])[0, 1]

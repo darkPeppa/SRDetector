@@ -161,6 +161,51 @@ def test_tracks_and_scan_jobs(fake_run):
     assert c.post("/api/jobs", json={"kind": "scan", "path": fake_run, "alias": "1; rm"}).status_code == 400
 
 
+def test_optimize_constructor_api(client):
+    meta = client.get("/api/optimize/meta").json()
+    names = {m["name"] for m in meta["metrics"]}
+    assert {"det_yield_per_keV", "psf_r50_um"} <= names and "full.yaml" in meta["bases"]
+    assert any(f["path"] == "geometry.length" and f["unit_kind"] == "length" for f in meta["fields"])
+    spec = client.get("/api/optimizations").json()["specs"][0]["spec"]
+    r = client.post("/api/optimize/check", json={"spec": spec}).json()
+    assert r["ok"] and r["plan"]["sims"] > 0 and r["plan"]["steps"][0]["text"].startswith("Отбор")
+    assert "objective:" in r["yaml"]
+    bad = client.post("/api/optimize/check", json={"spec": dict(spec, objective={"expr": "__import__('os')"})}).json()
+    assert not bad["ok"]
+    assert client.post("/api/optimize/check", json={"spec": "nope"}).status_code == 400
+
+
+def test_optimize_job_from_spec_and_overrides(tmp_path):
+    jobs = DummyJobs()
+    c = TestClient(create_app(jobs))
+    spec = dict(c.get("/api/optimizations").json()["specs"][0]["spec"], name="zz_test_ui")
+    r = c.post("/api/jobs", json={"kind": "optimize", "spec": spec, "quick": True}).json()
+    assert r["args"][0] == "optimize" and r["args"][1].endswith("_zz_test_ui.yaml") and "--quick" in r["args"]
+    written = ROOT / r["meta"]["spec_file"]
+    try:
+        import yaml
+        assert yaml.safe_load(written.read_text())["name"] == "zz_test_ui"
+    finally:
+        written.unlink(missing_ok=True)
+    assert c.post("/api/jobs", json={"kind": "optimize", "spec": dict(spec, space={})}).status_code == 400
+    # --set values are passed as YAML: None -> null, dicts keep their structure
+    r = c.post("/api/jobs", json={"kind": "study", "target": "U01_coating",
+                                  "overrides": {"run.events": 5, "beam.spectrum": None, "beam.optical": {"n": 3}}}).json()
+    assert "beam.spectrum=null" in r["args"] and 'beam.optical={"n": 3}' in r["args"]
+    assert c.post("/api/jobs", json={"kind": "study", "target": "U01_coating",
+                                     "overrides": {"a; rm -rf": 1}}).status_code == 400
+
+
+def test_studies_carry_explanations(client):
+    specs = {s["name"]: s for s in client.get("/api/studies").json()["specs"]}
+    for name, s in specs.items():
+        assert s["explain"].get("question"), f"{name}: explain.question missing"
+        assert s["n_points"] >= 1
+    lengths = specs["U04_length"]["scan"]["geometry.length"]
+    assert lengths[0] == "0.2 mm" and lengths[-1] == "100 mm"
+    assert specs["U04c_length_xray"]["derived"]["pe_per_incident_keV"]
+
+
 def test_histogram_api(client, fake_run):
     h = client.get("/api/run/hist", params={"path": fake_run, "name": "n_det"}).json()
     assert h["values"] == [0, 5, 9, 3] and h["edges"][0][-1] == 40 and h["entries"] == 17

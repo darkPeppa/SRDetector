@@ -176,6 +176,19 @@ def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastA
         path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True))
         return path
 
+    def _set_arg(key: str, value) -> str:
+        if not re.fullmatch(r"[A-Za-z_][\w.]*", str(key)):
+            raise HTTPException(400, f"bad override key {key!r}")
+        # JSON is valid YAML: None -> null, True -> true, dicts / lists keep their structure
+        return f"{key}={value if isinstance(value, str) else json.dumps(value)}"
+
+    def _write_spec(spec: dict) -> Path:
+        d = runs_dir() / "web_configs" / "optimize"
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}_{spec['name']}.yaml"
+        path.write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True))
+        return path
+
     @app.post("/api/macro")
     def macro(body: dict = Body(...)):
         from ..macro import render
@@ -207,11 +220,23 @@ def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastA
             if kind == "run":
                 args += archive
             title = f"{kind}: {name or cfg_path.stem}"
+        elif kind == "optimize" and body.get("spec"):  # spec built in the constructor of the UI
+            from ..optimize import check_spec
+            spec = body["spec"]
+            if not isinstance(spec, dict):
+                raise HTTPException(400, "spec must be an object")
+            chk = check_spec(spec, quick=bool(quick))
+            if not chk["ok"]:
+                raise HTTPException(400, "; ".join(chk["errors"]))
+            path = _write_spec(spec)
+            args = [kind, str(path), *quick, *archive]
+            meta["spec_file"] = _rel(path)
+            title = f"optimize: {spec['name']}{' (quick)' if quick else ''}"
         elif kind in ("study", "optimize"):
             target = body.get("target")
             if not target or not re.fullmatch(r"[A-Za-z0-9_]+", target):
                 raise HTTPException(400, "target required")
-            sets = [a for k, v in (body.get("overrides") or {}).items() for a in ("--set", f"{k}={v}")]
+            sets = [a for k, v in (body.get("overrides") or {}).items() for a in ("--set", _set_arg(k, v))]
             args = [kind, target, *quick, *archive, *sets]
             title = f"{kind}: {target}{' (quick)' if quick else ''}"
         elif kind == "tracks":  # short re-run of a run's configuration that stores trajectories for 3D
@@ -334,13 +359,16 @@ def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastA
     # ---------------- studies
     @app.get("/api/studies")
     def studies():
-        from ..studies import study_files
+        from ..studies import points, study_files
         specs = []
         for name, p in study_files().items():
-            s = yaml.safe_load(p.read_text())
+            s = yaml.safe_load(p.read_text()) or {}
+            scan = s.get("scan") or {"вариант": [v["label"] for v in s.get("variants", [])]}
             specs.append({"name": name, "title": s.get("title", ""), "description": s.get("description", ""),
-                          "base": s.get("base"), "scan": s.get("scan") or [v["label"] for v in s.get("variants", [])],
-                          "metrics": s.get("metrics", [])})
+                          "explain": s.get("explain") or {}, "base": s.get("base"), "set": s.get("set") or {},
+                          "scan": scan, "x_names": s.get("x_names"), "mode": s.get("mode", "product"),
+                          "n_points": len(points(s)), "derived": s.get("derived") or {},
+                          "metrics": s.get("metrics", []), "labels": s.get("labels") or {}})
         done = []
         for root in (runs_dir() / "studies", repo_root() / "results" / "studies"):
             for d in sorted(root.glob("*"), reverse=True):
@@ -362,30 +390,82 @@ def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastA
         from ..optimize import spec_files
         specs = []
         for name, p in spec_files().items():
-            s = yaml.safe_load(p.read_text())
+            s = yaml.safe_load(p.read_text()) or {}
             specs.append({"name": name, "title": s.get("title", ""), "description": s.get("description", ""),
                           "space": s.get("space", {}), "objective": s.get("objective", {}),
-                          "constraints": s.get("constraints", [])})
+                          "constraints": s.get("constraints", []), "spec": s})
         done = []
         for d in sorted((runs_dir() / "optimize").glob("*"), reverse=True):
-            if not (d / "trials.csv").exists():
+            # a search that has just started has spec.yaml but no trials yet: list it as running
+            if not d.is_dir() or not ((d / "trials.csv").exists() or (d / "spec.yaml").exists()):
                 continue
             fin = pd.read_csv(d / "final.csv") if (d / "final.csv").exists() else None
             best = _clean(fin.iloc[0].to_dict()) if fin is not None and len(fin) else None
             spec = yaml.safe_load((d / "spec.yaml").read_text()) if (d / "spec.yaml").exists() else {}
             done.append({"path": _rel(d), "name": d.name, "title": spec.get("title", ""),
                          "finished": (d / "report.md").exists(), "best": best,
-                         "aliases": list(spec.get("space", {}).keys()),
-                         "objective": spec.get("objective", {}).get("expr")})
+                         "progress": _json(d / "progress.json"),
+                         "aliases": list((spec.get("space") or {}).keys()),
+                         "objective": (spec.get("objective") or {}).get("expr")})
         return {"specs": specs, "results": done}
+
+    @app.get("/api/optimize/meta")
+    def optimize_meta():
+        """Everything the optimisation constructor needs: metrics with meaning and direction,
+        configurable parameters (from defaults.yaml) and base configurations."""
+        from ..labels import METRIC_HELP
+        from ..optimize import DEFAULT_QUICK, SAMPLER_TEXT, SAFE
+        fields = [f for sec in form_schema()["sections"] for f in sec["fields"]
+                  if f["kind"] in ("quantity", "int", "float", "choice", "bool", "string")]
+        metrics = [{"name": k, "label": METRIC_LABELS.get(k, k), "help": h, "better": b}
+                   for k, (h, b) in METRIC_HELP.items()]
+        return {"metrics": metrics, "fields": fields, "samplers": SAMPLER_TEXT, "quick_default": DEFAULT_QUICK,
+                "functions": [k for k, v in SAFE.items() if callable(v)],
+                "bases": [c["name"] + ".yaml" for c in configs()]}
+
+    @app.post("/api/optimize/check")
+    def optimize_check(body: dict = Body(...)):
+        from ..optimize import check_spec
+        spec = body.get("spec")
+        if not isinstance(spec, dict):
+            raise HTTPException(400, "spec must be an object")
+        try:
+            res = check_spec(spec, quick=bool(body.get("quick")))
+        except Exception as e:  # malformed input from the editor: report, do not crash
+            res = {"ok": False, "errors": [f"{type(e).__name__}: {e}"], "warnings": [],
+                   "plan": {"steps": [], "sims": 0, "events": 0}}
+        res["yaml"] = yaml.safe_dump(spec, sort_keys=False, allow_unicode=True)
+        return _clean(res)
+
+    @app.post("/api/optimize/save")
+    def optimize_save(body: dict = Body(...)):
+        """Store a constructor spec as configs/optimize/<name>.yaml (a new preset)."""
+        from ..optimize import check_spec
+        spec = body.get("spec")
+        if not isinstance(spec, dict):
+            raise HTTPException(400, "spec must be an object")
+        chk = check_spec(spec)
+        if not chk["ok"]:
+            raise HTTPException(400, "; ".join(chk["errors"]))
+        path = configs_dir() / "optimize" / f"{spec['name']}.yaml"
+        if path.exists() and not body.get("overwrite"):
+            raise HTTPException(409, f"{_rel(path)} уже существует")
+        path.write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True))
+        return {"path": _rel(path)}
 
     @app.get("/api/optimization")
     def optimization(path: str = Query(...)):
+        from ..optimize import check_spec
         d = _safe(path)
         spec = yaml.safe_load((d / "spec.yaml").read_text()) if (d / "spec.yaml").exists() else {}
-        trials = pd.read_csv(d / "trials.csv").to_dict("records")
+        trials = pd.read_csv(d / "trials.csv").to_dict("records") if (d / "trials.csv").exists() else []
         final = pd.read_csv(d / "final.csv").to_dict("records") if (d / "final.csv").exists() else []
-        return _clean({"path": path, "spec": spec, "trials": trials, "final": final,
+        try:
+            plan = check_spec(spec)["plan"] if spec else None
+        except Exception:  # an old / hand-edited spec must not break the page
+            plan = None
+        return _clean({"path": path, "spec": spec, "trials": trials, "final": final, "plan": plan,
+                       "progress": _json(d / "progress.json"), "finished": (d / "report.md").exists(),
                        "report": (d / "report.md").read_text() if (d / "report.md").exists() else "",
                        "best_yaml": (d / "best.yaml").read_text() if (d / "best.yaml").exists() else "",
                        "best_path": _rel(d / "best.yaml") if (d / "best.yaml").exists() else None,

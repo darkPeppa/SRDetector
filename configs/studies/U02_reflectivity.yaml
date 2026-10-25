@@ -4,6 +4,15 @@ description: >
   Ideal specular mirror with constant R. Every photon needs about N reflections to leave the
   channel, so LCE should follow LCE(1)·R^N; the overlay uses the measured mean N at R = 1.
   Validates the reflection bookkeeping and shows how fast the light loss grows with 1 - R.
+explain:
+  question: "Насколько светосбор чувствителен к коэффициенту отражения R покрытия?"
+  why: >
+    Идеальное зеркало с постоянным R отделяет «сколько отражений» от «сколько теряется на каждом».
+    Значения R сгущены к 1 (0.95…1.0), потому что там зависимость самая крутая и именно там лежат
+    реальные хорошие покрытия. Прогон с R = 1 сохраняет траектории всех фотонов, по ним считается
+    независимое предсказание LCE(R) = Σ R^N_i — проверка правильности учёта отражений.
+  expect: "LCE растёт с R очень быстро: 1 % отражательной способности стоит десятков процентов света."
+  read: "Точки симуляции должны ложиться на линию предсказания; расхождение — ошибка модели."
 base: unit_optical.yaml
 set: {optics.coating: mirror, run.photon_fraction: 1.0}
 scan:

@@ -2,6 +2,7 @@
 statistics, constraints, derived parameters, invalid geometry, resume and reporting."""
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -156,6 +157,79 @@ def test_refine_revisits_categories(tmp_path):
     out = Optimizer(spec, evaluator=ev, out_dir=tmp_path / "opt").run()
     best = pd.read_csv(out / "final.csv").iloc[0]
     assert best["sensor"] == "aSi_FPD" and best["window"] < 0.04
+
+
+def test_expressions_are_sandboxed():
+    from srdet.optimize import expr_names, safe_eval
+    assert safe_eval("a * log(b) + max(1, 2)", {"a": 2.0, "b": math.e}) == pytest.approx(4.0)
+    assert expr_names("det_yield_per_keV * detection_efficiency / L") == {"det_yield_per_keV", "detection_efficiency", "L"}
+    for bad in ["().__class__.__base__", "__import__('os')", "open('x')", "[x for x in (1,)]", "a[0]", "lambda: 1"]:
+        with pytest.raises(ValueError):
+            safe_eval(bad, {"a": [1]})
+
+
+def test_check_spec_reports_errors_and_plan():
+    from srdet.optimize import check_spec
+    ok = check_spec(SPEC)
+    assert ok["ok"], ok["errors"]
+    plan = ok["plan"]
+    # 24 -> 8 -> 3 screening, refine bound 5 x (1 + 2*2), final 2 x 3
+    assert [s["sims"] for s in plan["steps"]] == [24, 8, 3, 25, 6]
+    assert plan["sims"] == 66 and plan["events"] == 24 * 100 + 8 * 1000 + 3 * 10000 + 25 * 10000 + 6 * 20000
+    quick = check_spec(dict(SPEC, quick={"initial": 4, "events": [10], "refine": None, "final": None}), quick=True)
+    assert quick["plan"]["sims"] == 4
+    bad = check_spec(dict(SPEC, name="a b", objective={"expr": "x.__class__"},
+                          space=dict(SPEC["space"], L={"path": "geometry.length", "low": "0 mm", "high": "1 mm", "log": True})))
+    text = " ".join(bad["errors"])
+    assert not bad["ok"] and "name" in text and "log" in text
+    typo = check_spec(dict(SPEC, constraints=["detection_eficiency >= 0.6"], set={"geometry.lenght": "2 mm"}))
+    assert typo["ok"] and any("detection_eficiency" in w for w in typo["warnings"])
+    assert any("geometry.lenght" in w for w in typo["warnings"])
+
+
+def test_resume_does_not_duplicate_and_keeps_overrides(tmp_path):
+    spec = dict(SPEC, search=dict(SPEC["search"], initial=6, events=[100, 300], refine=None,
+                                  final={"top": 1, "events": 300, "repeats": 2}))
+    out = Optimizer(spec, evaluator=fake_physics, out_dir=tmp_path / "opt", extra_sets=["beam.energy=100 keV"]).run()
+    n = len(pd.read_csv(out / "trials.csv"))
+    saved = yaml.safe_load((out / "spec.yaml").read_text())
+    assert saved["set"]["beam.energy"] == "100 keV", "--set overrides must survive a resume / scan"
+    Optimizer(saved, evaluator=fake_physics, out_dir=out).run()
+    assert len(pd.read_csv(out / "trials.csv")) == n, "a resume must not append the cached trials twice"
+    assert C.load(out / "best.yaml")["beam"]["energy"] == "100 keV"
+    assert json.loads((out / "progress.json").read_text())["finished"] is True
+
+
+def test_quick_search_is_what_gets_saved(tmp_path):
+    spec = dict(SPEC, quick={"initial": 3, "events": [50], "refine": None, "final": None})
+    out = Optimizer(spec, quick=True, evaluator=fake_physics, out_dir=tmp_path / "opt").run()
+    saved = yaml.safe_load((out / "spec.yaml").read_text())
+    assert saved["search"]["events"] == [50] and saved["search"]["initial"] == 3
+
+
+def test_infeasible_validated_candidate_is_not_best(tmp_path):
+    """Validation repeats can turn a screening winner infeasible; it must not become best.yaml."""
+    def ev(cfg, name, parent):
+        coat = cfg["optics"]["coating"]
+        n = cfg["run"]["events"]
+        # Ag is brighter but violates the constraint at high statistics
+        return {"det_yield_per_keV": 3.0 if coat == "Ag" else 1.0,
+                "detection_efficiency": 0.9 if (coat == "Al" or n < 1000) else 0.1}
+    spec = {"name": "T_inf", "base": "unit_xray.yaml",
+            "space": {"coat": {"path": "optics.coating", "values": ["Al", "Ag"]}},
+            "objective": {"expr": "det_yield_per_keV"}, "constraints": ["detection_efficiency >= 0.5"],
+            "search": {"sampler": "grid", "events": [100], "final": {"top": 2, "events": 2000, "repeats": 2}}}
+    out = Optimizer(spec, evaluator=ev, out_dir=tmp_path / "opt").run()
+    best = pd.read_csv(out / "final.csv").iloc[0]
+    assert best["coat"] == "Al" and bool(best["feasible_all"])
+
+
+def test_constraint_math_errors_make_trial_infeasible(tmp_path):
+    spec = dict(SPEC, constraints=["log(detection_efficiency - 10) > 0"],
+                search=dict(SPEC["search"], initial=3, events=[100], refine=None, final=None))
+    opt = Optimizer(spec, evaluator=fake_physics, out_dir=tmp_path / "opt")
+    opt.run()  # math domain error inside a constraint must not crash the search
+    assert not pd.read_csv(opt.dir / "trials.csv")["feasible"].any()
 
 
 def test_scan_parameter_varies_only_one_axis(tmp_path):

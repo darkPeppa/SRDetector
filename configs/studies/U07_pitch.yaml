@@ -5,6 +5,14 @@ description: >
   central cell. Thicker walls lower the scintillator fill factor but stop secondary electrons
   and fluorescence X-rays from leaking into the neighbours. Bare channels (none) are compared
   with Al-coated ones for optical cross-talk.
+explain:
+  question: "Какая толщина стеклянной стенки между каналами оптимальна?"
+  why: >
+    Семь сот (центральная и соседи) и пучок 60 кэВ на центральную: видно, сколько энергии и света
+    уходит к соседям. D = 200 мкм фиксирован, шаг 206–280 мкм даёт стенку от ~2 до ~76 мкм.
+    Голые каналы (none) сравниваются с покрытыми Al, чтобы увидеть оптический кросс-ток.
+  expect: "Толще стенка — меньше ЭМ-кросс-ток (стекло ловит флуоресценцию), но меньше доля сцинтиллятора."
+  read: "Ищите шаг, где em_crosstalk уже мал, а geometry_fill_factor ещё высок."
 base: cluster7_xray.yaml
 scan:
   optics.coating: [none, Al]

@@ -3,6 +3,13 @@ title: "B2 - radioactive sources and X-ray tube spectra on the full detector"
 description: >
   Parallel beam (r = 10 mm) with the photon spectrum of Am-241, Co-57, Cs-137 and a W-anode tube
   at 80 and 120 kVp (2.5 mm Al filtration, approximate Kramers model).
+explain:
+  question: "Как детектор работает с реальными источниками вместо монохроматического пучка?"
+  why: >
+    Типичные калибровочные источники (Am-241 59.5 кэВ, Co-57 122 кэВ, Cs-137 662 кэВ) и спектры
+    рентгеновской трубки 80 и 120 кВп — то, что будет на стенде.
+  expect: "Am-241 и Co-57 регистрируются хорошо, Cs-137 — плохо (слишком жёсткий для коротких каналов)."
+  read: "mean_edep_core_keV показывает, какая энергия реально остаётся в сцинтилляторе."
 base: full.yaml
 scan:
   beam.spectrum: [{source: Am241}, {source: Co57}, {source: Cs137}, {xray_tube: {kvp: 80}}, {xray_tube: {kvp: 120}}]

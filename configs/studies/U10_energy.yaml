@@ -5,6 +5,16 @@ description: >
   first-interaction process mix (photoelectric / Compton / Rayleigh / pair) versus the beam
   energy, the K edges of I (33.2 keV) and Cs (36.0 keV), the photopeak and K-escape fractions
   and the lateral energy spread (cells hit).
+explain:
+  question: "Для каких энергий рентгена подходит сотовый детектор и что происходит при росте энергии?"
+  why: >
+    Оптика выключена, чтобы быстро пройти 10 кэВ – 5 МэВ (19 точек). Точки сгущены у 33–36 кэВ — там
+    K-края иода и цезия, где резко меняется флуоресценция. Пучок узкий, в центральный канал, чтобы
+    измерить разлёт энергии по соседним сотам.
+  expect: >
+    До ~200 кэВ доминирует фотоэффект, выше — комптон; за K-краем растёт K-escape; выше ~300 кэВ
+    энергия расползается по многим сотам.
+  read: "Графики долей процессов и число сработавших сот показывают, где детектор ещё локализует событие."
 base: full.yaml
 set:
   beam.type: pencil

@@ -96,3 +96,18 @@ def test_all_studies_expand():
                 if k != "variant":
                     C.set_path(c, k, v)
             macro.render(c, ROOT / "runs" / "dummy")
+
+
+def test_study_derived_metrics_and_explained_report(tmp_path):
+    import pandas as pd
+    from srdet.studies import derived_metrics, write_report
+    study = {"name": "T_len", "title": "t", "scan": {"geometry.length": ["1 mm", "2 mm"]},
+             "derived": {"pe_in": "det_yield_per_keV * detection_efficiency", "bad": "missing * 2"},
+             "metrics": ["pe_in"], "explain": {"question": "Какая длина лучше?", "why": "потому что"}}
+    row = {"det_yield_per_keV": 8.0, "detection_efficiency": 0.5, "ok": True}
+    d = derived_metrics(study, row)
+    assert d["pe_in"] == 4.0 and d["bad"] != d["bad"]  # NaN for a missing input
+    df = pd.DataFrame([{"geometry.length": 1.0, "ok": True, "run_dir": "a", **d},
+                       {"geometry.length": 2.0, "ok": True, "run_dir": "b", **d}])
+    text = write_report(study, df, tmp_path).read_text()
+    assert "Зачем это исследование" in text and "Какая длина лучше?" in text

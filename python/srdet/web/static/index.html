@@ -345,13 +345,34 @@
 
 <!-- ======================== studies ======================== -->
 <section x-show="route.view === 'studies'">
-  <div class="topbar"><h1>Исследования (сканы одного параметра)</h1></div>
+  <div class="topbar"><h1>Исследования (сканы параметров)</h1></div>
+  <div class="infobox" style="margin-bottom:14px">Каждое исследование отвечает на один вопрос: меняется один параметр (иногда два — тогда второй рисуется
+    отдельными линиями), всё остальное закреплено. <b>U</b> — единичные кейсы (один канал или кластер из 7 сот, чтобы изолировать
+    эффект), <b>B</b> — пучки и источники, <b>F</b> — сравнение на полном детекторе. Раскройте «почему так», чтобы увидеть,
+    почему выбраны именно эти условия и значения, чего ожидать и как читать график.</div>
   <div class="grid g3">
     <template x-for="s in studies.specs" :key="s.name">
-      <div class="card"><h2 x-text="s.name"></h2><div class="sub" x-text="s.title"></div>
-        <div class="small muted" style="max-height:66px;overflow:hidden" x-text="s.description"></div>
-        <div class="row" style="margin-top:10px"><button class="btn sm" @click="submit({kind:'study', target:s.name, quick:true})">quick</button>
-          <button class="btn sm primary" @click="submit({kind:'study', target:s.name, archive:true})">полный + архив</button></div></div>
+      <div class="card"><h2 x-text="s.name"></h2>
+        <div class="study-q" x-text="(s.explain && s.explain.question) || s.title"></div>
+        <div class="small muted" x-text="s.title"></div>
+        <div class="small" style="margin-top:6px"><template x-for="[k, vals] in Object.entries(s.scan)">
+          <div><span class="muted" x-text="k + ':'"></span> <template x-for="(v, i) in vals"><span class="chip" x-text="studyValue(s, k, v, i)"></span></template></div></template></div>
+        <div class="small muted" style="margin-top:4px">
+          <span x-text="s.n_points + ' прогонов · база ' + s.base"></span>
+          <template x-for="[k, v] in Object.entries(s.set)"><span class="chip" x-text="k + ' = ' + (typeof v === 'object' ? JSON.stringify(v) : v)"></span></template></div>
+        <details class="sec" style="margin-top:8px" x-show="s.explain && s.explain.why"><summary>почему так</summary>
+          <div class="small">
+            <p x-show="s.explain.why"><b>Условия и значения.</b> <span x-text="s.explain.why"></span></p>
+            <p x-show="s.explain.expect"><b>Чего ожидаем.</b> <span x-text="s.explain.expect"></span></p>
+            <p x-show="s.explain.read"><b>Как читать.</b> <span x-text="s.explain.read"></span></p>
+            <p class="muted" x-text="s.description"></p>
+            <p x-show="Object.keys(s.derived || {}).length"><b>Вычисляемые величины:</b> <template x-for="[k, e] in Object.entries(s.derived || {})"><code style="display:block" x-text="k + ' = ' + e"></code></template></p>
+          </div></details>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" @click="submit({kind:'study', target:s.name, quick:true})">quick</button>
+          <button class="btn sm primary" @click="submit({kind:'study', target:s.name, archive:true, overrides: studyEvents[s.name] ? {'run.events': +studyEvents[s.name]} : {}})">полный + архив</button>
+          <span class="small muted">событий</span><input type="number" min="1" style="width:90px" placeholder="как в базе" x-model="studyEvents[s.name]">
+        </div></div>
     </template>
   </div>
   <div class="card" style="margin-top:14px"><h2>Готовые отчёты</h2>
@@ -365,6 +386,15 @@
     <div class="topbar"><h1 x-text="(study.spec && study.spec.title) || study.path"></h1><div class="spacer"></div>
       <a class="btn" :href="'/api/export?fmt=xlsx&path=' + encodeURIComponent(study.path)">⬇ Excel</a>
       <a class="btn" :href="'/api/export?fmt=zip&path=' + encodeURIComponent(study.path)">⬇ ZIP-пакет</a></div>
+    <div class="card" style="margin-bottom:14px" x-show="studyExplain().question">
+      <div class="study-q" x-text="studyExplain().question"></div>
+      <div class="grid g3 small">
+        <div x-show="studyExplain().why"><b>Почему так.</b> <span x-text="studyExplain().why"></span></div>
+        <div x-show="studyExplain().expect"><b>Чего ожидаем.</b> <span x-text="studyExplain().expect"></span></div>
+        <div x-show="studyExplain().read"><b>Как читать.</b> <span x-text="studyExplain().read"></span></div>
+      </div>
+      <div class="small muted" style="margin-top:6px" x-show="studyExplain().stale">Пояснение взято из текущей спецификации — результат мог быть посчитан с другими значениями (см. таблицу).</div>
+    </div>
     <div class="card" x-show="study.rows.length"><h2>Интерактивный график</h2>
       <div class="row"><span class="small muted">x:</span><select style="width:220px" x-model="studyX" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="c" :selected="c === studyX"></option></template></select>
         <span class="small muted">y:</span><select style="width:260px" x-model="studyY" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="label(c) + ' (' + c + ')'" :selected="c === studyY"></option></template></select>
@@ -378,34 +408,248 @@
 <!-- ======================== optimisation ======================== -->
 <section x-show="route.view === 'optimize'">
   <div class="topbar"><h1>Оптимизация параметров</h1><div class="spacer"></div><a class="btn" href="#/docs?path=docs/optimization.md">как это работает</a></div>
-  <div class="grid g3">
-    <template x-for="s in opts.specs" :key="s.name">
-      <div class="card"><h2 x-text="s.name"></h2><div class="sub" x-text="s.title"></div>
-        <div class="small"><b>цель:</b> <code x-text="s.objective.expr"></code></div>
-        <div class="small" style="margin-top:4px"><b>параметры:</b> <template x-for="[a, d] in Object.entries(s.space)"><span class="chip" x-text="a + (d.values ? ' ∈ {' + d.values.join(', ') + '}' : ' ∈ [' + d.low + ', ' + d.high + ']')"></span></template></div>
-        <div class="small" style="margin-top:4px" x-show="s.constraints.length"><b>ограничения:</b> <template x-for="c in s.constraints"><span class="chip" x-text="c"></span></template></div>
-        <div class="row" style="margin-top:10px"><button class="btn sm" @click="submit({kind:'optimize', target:s.name, quick:true})">quick</button>
-          <button class="btn sm primary" @click="submit({kind:'optimize', target:s.name, archive:true})">полный + архив</button></div></div>
-    </template>
+  <div class="tabs">
+    <a :class="{active: optimizeTab === 'constructor'}" @click="optimizeTab = 'constructor'">Конструктор</a>
+    <a :class="{active: optimizeTab === 'results'}" @click="optimizeTab = 'results'">Результаты (<span x-text="opts.results.length"></span>)</a>
   </div>
-  <div class="card" style="margin-top:14px"><h2>Результаты</h2>
+
+  <!-- ---------- constructor ---------- -->
+  <div x-show="optimizeTab === 'constructor'" class="split" @input.debounce.500ms="obCheck()" @change="obCheck()">
+    <div>
+      <div class="card">
+        <h2>1. Начать с готовой спецификации</h2>
+        <div class="sub">Выберите пресет — все его настройки появятся ниже, и их можно поменять. Или начните с пустой.</div>
+        <div class="row">
+          <select style="max-width:420px" x-model="ob.preset" @change.stop="obLoadPreset(ob.preset)">
+            <option value="">— пустая спецификация —</option>
+            <template x-for="s in opts.specs" :key="s.name"><option :value="s.name" x-text="s.name + ' — ' + s.title" :selected="s.name === ob.preset"></option></template>
+          </select>
+          <button class="btn sm" @click="obLoadPreset(ob.preset)">↺ сбросить к пресету</button>
+        </div>
+        <div class="small muted" style="margin-top:6px" x-text="(opts.specs.find(s => s.name === ob.preset) || {}).description"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>2. Детектор и фиксированные условия</h2>
+        <div class="sub">От какой конфигурации стартует поиск и что в ней закреплено для всех кандидатов (энергия пучка, длина…).</div>
+        <div class="ob-grid2">
+          <label>имя (папка результата)<input x-model="ob.name" placeholder="my_opt"></label>
+          <label>базовая конфигурация<select x-model="ob.base"><template x-for="b in obMeta.bases"><option :value="b" x-text="b" :selected="b === ob.base"></option></template></select></label>
+          <label style="grid-column: span 2">заголовок<input x-model="ob.title" placeholder="что ищем, коротко"></label>
+        </div>
+        <label class="small muted" style="display:block;margin-top:8px">описание (попадёт в отчёт)<textarea rows="2" x-model="ob.description"></textarea></label>
+        <h3>Фиксированные параметры</h3>
+        <div class="ob-row ob-fixed ob-head"><span>параметр</span><span>значение</span><span></span></div>
+        <template x-for="(r, i) in ob.fixed" :key="i">
+          <div class="ob-row ob-fixed">
+            <select x-model="r.path"><option value="">— выберите —</option><template x-for="f in obMeta.fields"><option :value="f.path" x-text="f.path" :selected="f.path === r.path"></option></template></select>
+            <span>
+              <template x-if="obField(r.path).choices"><select x-model="r.value"><template x-for="c in obField(r.path).choices"><option :value="c" x-text="c === '' ? '(по умолчанию)' : c" :selected="c === r.value"></option></template></select></template>
+              <template x-if="!obField(r.path).choices"><input x-model="r.value" :placeholder="obPlaceholder(r.path)"></template>
+            </span>
+            <button class="ob-x" title="убрать" @click="ob.fixed.splice(i, 1); obCheck()">✕</button>
+          </div>
+        </template>
+        <button class="btn sm" style="margin-top:6px" @click="ob.fixed.push({path: '', value: ''})">＋ закрепить параметр</button>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>3. Что меняем — свободные параметры</h2>
+        <div class="sub">Каждому параметру — короткое имя (его можно использовать в формулах). Диапазон: границы и единицы; «log» — точки равномерны в логарифме (для величин, меняющихся в разы). Варианты — перебор значений.</div>
+        <div class="ob-row ob-param ob-head"><span>имя</span><span>ключ конфигурации</span><span>тип</span><span>значения</span><span></span></div>
+        <template x-for="(p, i) in ob.params" :key="i">
+          <div class="ob-row ob-param">
+            <input x-model="p.alias" placeholder="L">
+            <select x-model="p.path" @change="obParamPath(p)">
+              <option value="">(виртуальный — только в формулах)</option>
+              <template x-for="f in obMeta.fields"><option :value="f.path" x-text="f.path" :selected="f.path === p.path"></option></template>
+            </select>
+            <select x-model="p.kind"><option value="range">диапазон</option><option value="int">целые</option><option value="choice">варианты</option></select>
+            <div>
+              <template x-if="p.kind !== 'choice'">
+                <div class="ob-range">
+                  <input type="number" step="any" x-model="p.low" placeholder="от">
+                  <input type="number" step="any" x-model="p.high" placeholder="до">
+                  <select x-model="p.unit"><option value="">—</option><template x-for="u in obUnits(p)"><option :value="u" x-text="u" :selected="u === p.unit"></option></template></select>
+                  <label class="row small" title="точки равномерно в логарифме"><input type="checkbox" x-model="p.log"> log</label>
+                </div>
+              </template>
+              <template x-if="p.kind === 'choice' && obField(p.path).choices">
+                <div class="ob-choices"><template x-for="c in obField(p.path).choices.filter(c => c !== '')"><label><input type="checkbox" :checked="p.values.includes(c)" @change="obToggle(p, c, $event.target.checked)"><span x-text="c"></span></label></template></div>
+              </template>
+              <template x-if="p.kind === 'choice' && !obField(p.path).choices">
+                <input :value="p.values.join(', ')" @input="p.values = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)" placeholder="значения через запятую">
+              </template>
+              <div class="small muted" x-show="ob.search.sampler === 'grid' && p.kind !== 'choice'">точек сетки: <input type="number" min="2" style="width:60px" x-model.number="p.steps"></div>
+              <div class="small muted" x-text="obFieldHelp(p.path)"></div>
+            </div>
+            <button class="ob-x" title="убрать" @click="ob.params.splice(i, 1); obCheck()">✕</button>
+          </div>
+        </template>
+        <button class="btn sm" style="margin-top:6px" @click="ob.params.push({alias: 'p' + (ob.params.length + 1), path: '', kind: 'range', low: '', high: '', unit: '', log: false, steps: 3, values: []})">＋ параметр</button>
+
+        <details class="sec" style="margin-top:12px" :open="ob.derived.length > 0">
+          <summary>Вычисляемые параметры <span class="small muted">(необязательно)</span></summary>
+          <div>
+            <div class="small muted" style="margin-bottom:6px">Ключ конфигурации, который считается из свободных параметров — например, шаг сот из диаметра и стенки,
+              чтобы каждая точка была допустимой геометрией. Числа в базовых единицах: мм, кэВ, градусы.</div>
+            <template x-for="(d, i) in ob.derived" :key="i">
+              <div class="ob-row ob-derived">
+                <select x-model="d.path"><option value="">— ключ —</option><template x-for="f in obMeta.fields"><option :value="f.path" x-text="f.path" :selected="f.path === d.path"></option></template></select>
+                <input class="mono" x-model="d.expr" placeholder="D + 2*0.002 + wall">
+                <select x-model="d.unit"><option value="">—</option><template x-for="u in ['mm','um','keV','deg']"><option :value="u" x-text="u" :selected="u === d.unit"></option></template></select>
+                <button class="ob-x" @click="ob.derived.splice(i, 1); obCheck()">✕</button>
+              </div>
+            </template>
+            <button class="btn sm" @click="ob.derived.push({path: '', expr: '', unit: 'mm'})">＋ вычисляемый</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>4. Цель — что считаем «лучше»</h2>
+        <div class="sub">Одно число на кандидата. Можно выбрать метрику или собрать формулу (×, ÷, +, −, log, sqrt, min, max).</div>
+        <div class="row">
+          <select style="width:150px" x-model="ob.direction"><option value="maximize">максимизировать</option><option value="minimize">минимизировать</option></select>
+          <input class="mono" style="flex:1;min-width:240px" x-model="ob.objective" placeholder="det_yield_per_keV * detection_efficiency">
+        </div>
+        <div class="row small" style="margin-top:6px"><span class="muted">добавить метрику:</span>
+          <select style="width:300px" @change="obAddToObjective($event.target.value); $event.target.value = ''">
+            <option value="">— выберите —</option>
+            <template x-for="m in obMeta.metrics"><option :value="m.name" x-text="m.label + ' (' + m.name + ')'"></option></template>
+          </select>
+          <span class="muted">готовые:</span>
+          <template x-for="g in OBJECTIVE_PRESETS"><button class="btn sm" @click="ob.objective = g.expr; ob.direction = g.dir; obCheck()" x-text="g.title"></button></template>
+        </div>
+        <div class="ob-formula" x-html="obFormula()"></div>
+        <template x-for="m in obMetricsIn(ob.objective)"><div class="small"><b x-text="m.label"></b> — <span class="muted" x-text="m.help"></span>
+          <span class="badge warn" x-show="m.better && m.better !== (ob.direction === 'maximize' ? 'max' : 'min') && obMetricsIn(ob.objective).length === 1">обычно эту величину <span x-text="m.better === 'max' ? 'максимизируют' : 'минимизируют'"></span></span></div></template>
+
+        <h3>Ограничения — требования, которые обязаны выполняться</h3>
+        <div class="small muted" style="margin-bottom:6px">Кандидат, нарушивший хоть одно, считается недопустимым, как бы хороша ни была цель.
+          Требования лучше задавать здесь, а не весами в цели: «r50 ≤ 120 мкм» понятнее и устойчивее.</div>
+        <template x-for="(c, i) in ob.constraints" :key="i">
+          <div class="ob-row ob-cons">
+            <input class="mono" list="ob-metric-list" x-model="c.left" placeholder="psf_r50_um">
+            <select x-model="c.op"><template x-for="o in ['<=','>=','<','>','==','!=']"><option :value="o" x-text="o" :selected="o === c.op"></option></template></select>
+            <input class="mono" x-model="c.right" placeholder="120">
+            <span class="small muted" x-text="obConstraintText(c)"></span>
+            <button class="ob-x" @click="ob.constraints.splice(i, 1); obCheck()">✕</button>
+          </div>
+        </template>
+        <datalist id="ob-metric-list"><template x-for="m in obMeta.metrics"><option :value="m.name" x-text="m.label"></option></template></datalist>
+        <button class="btn sm" style="margin-top:6px" @click="ob.constraints.push({left: '', op: '<=', right: ''})">＋ ограничение</button>
+
+        <h3>Компромисс (фронт Парето) и метрики отчёта</h3>
+        <div class="row small">
+          <label class="row"><input type="checkbox" x-model="ob.pareto.on"> строить фронт Парето:</label>
+          <select style="width:200px" x-model="ob.pareto.y" :disabled="!ob.pareto.on"><template x-for="m in obMeta.metrics"><option :value="m.name" x-text="m.label" :selected="m.name === ob.pareto.y"></option></template></select>
+          <select style="width:80px" x-model="ob.pareto.y_dir" :disabled="!ob.pareto.on"><option value="max">↑ лучше</option><option value="min">↓ лучше</option></select>
+          <span class="muted">против</span>
+          <select style="width:200px" x-model="ob.pareto.x" :disabled="!ob.pareto.on"><template x-for="m in obMeta.metrics"><option :value="m.name" x-text="m.label" :selected="m.name === ob.pareto.x"></option></template></select>
+          <select style="width:80px" x-model="ob.pareto.x_dir" :disabled="!ob.pareto.on"><option value="min">↓ лучше</option><option value="max">↑ лучше</option></select>
+        </div>
+        <div class="small" style="margin-top:8px"><span class="muted">в отчёт и таблицы:</span>
+          <template x-for="m in ob.report"><span class="chip" x-text="label(m) + ' ✕'" style="cursor:pointer" @click="ob.report = ob.report.filter(x => x !== m); obCheck()"></span></template>
+          <select style="width:220px" @change="if ($event.target.value && !ob.report.includes($event.target.value)) ob.report.push($event.target.value); $event.target.value = ''">
+            <option value="">＋ метрика</option><template x-for="m in obMeta.metrics"><option :value="m.name" x-text="m.label"></option></template></select>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>5. Метод поиска и статистика прогонов</h2>
+        <div class="sub">Поиск идёт ступенями: много кандидатов на малой статистике → лучшая доля пересчитывается точнее → уточнение вокруг лучшего → проверка повторами. Справа — план с числом симуляций.</div>
+        <div class="ob-grid2">
+          <label>выбор кандидатов<select x-model="ob.search.sampler"><option value="lhs">латинский гиперкуб</option><option value="random">случайно</option><option value="grid">полная сетка</option></select></label>
+          <label x-show="ob.search.sampler !== 'grid'">кандидатов на 1-й ступени<input type="number" min="1" x-model.number="ob.search.initial"></label>
+          <label>событий по ступеням<input class="mono" x-model="ob.search.events" placeholder="300, 900, 2700"></label>
+          <label>отсев: остаётся 1/η, η =<input type="number" min="1.1" step="0.5" x-model.number="ob.search.eta"></label>
+          <label>seed<input type="number" min="0" x-model.number="ob.search.seed"></label>
+        </div>
+        <div class="small muted" style="margin-top:4px" x-text="obMeta.samplers ? obMeta.samplers[ob.search.sampler] : ''"></div>
+        <h3><label class="row"><input type="checkbox" x-model="ob.search.refineOn"> Уточнение вокруг лучшей точки</label></h3>
+        <div class="ob-grid2" x-show="ob.search.refineOn">
+          <label>итераций<input type="number" min="1" x-model.number="ob.search.refine.iterations"></label>
+          <label>событий<input type="number" min="1" x-model.number="ob.search.refine.events"></label>
+          <label>шаг (доля диапазона)<input type="number" min="0.01" max="1" step="0.05" x-model.number="ob.search.refine.step"></label>
+          <label>мин. выигрыш (доля)<input type="number" min="0" step="0.01" x-model.number="ob.search.refine.min_gain"></label>
+        </div>
+        <h3><label class="row"><input type="checkbox" x-model="ob.search.finalOn"> Проверка лучших повторами</label></h3>
+        <div class="ob-grid2" x-show="ob.search.finalOn">
+          <label>лучших кандидатов<input type="number" min="1" x-model.number="ob.search.final.top"></label>
+          <label>повторов (новые seed)<input type="number" min="1" x-model.number="ob.search.final.repeats"></label>
+          <label>событий<input type="number" min="1" x-model.number="ob.search.final.events"></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- plan / launch (scrolls on its own: taller than a small window) -->
+    <div class="sticky ob-plan">
+      <div class="card">
+        <h2>План и запуск <span :class="obChecking ? 'badge' : ''" x-text="obChecking ? 'проверка…' : ''"></span></h2>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn" :disabled="!obResult || !obResult.ok" @click="obLaunch(true)">▶ quick (проверить за минуту)</button>
+          <button class="btn primary" :disabled="!obResult || !obResult.ok" @click="obLaunch(false)">▶ Полный поиск</button>
+          <label class="row small"><input type="checkbox" x-model="ob.archive"> в архив results/</label>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn sm" :disabled="!obResult || !obResult.ok" @click="obSave()">💾 сохранить как пресет</button>
+          <button class="btn sm" @click="obDownload()">⬇ YAML</button>
+        </div>
+        <div class="row small" style="margin-bottom:8px">
+          <label class="row"><input type="checkbox" x-model="ob.quick"> показать план быстрой проверки (quick)</label>
+        </div>
+        <template x-if="obResult">
+          <div>
+            <template x-for="e in obResult.errors"><div class="warnbox" style="margin-bottom:6px" x-text="e"></div></template>
+            <template x-for="w in obResult.warnings"><div class="warnbox soft" style="margin-bottom:6px" x-text="w"></div></template>
+            <div class="okbox" x-show="obResult.ok && !obResult.warnings.length" style="margin-bottom:6px">Спецификация корректна.</div>
+            <div class="ob-formula" style="font-weight:400" x-html="obFormula()"></div>
+            <ol class="ob-steps">
+              <template x-for="s in obResult.plan.steps"><li><span x-text="s.text"></span>
+                <span class="n" x-show="s.sims" x-text="fmt(s.sims) + ' симуляций × ' + fmt(s.events) + ' событий'"></span></li></template>
+            </ol>
+            <div class="grid g2">
+              <div class="card kpi"><span class="v" x-text="fmt(obResult.plan.sims)"></span><span class="l">симуляций (не больше)</span></div>
+              <div class="card kpi"><span class="v" x-text="fmt(obResult.plan.events)"></span><span class="l">событий всего</span></div>
+            </div>
+            <div class="small muted" style="margin-top:6px" x-show="obEta()" x-text="obEta()"></div>
+          </div>
+        </template>
+        <details class="sec" style="margin-top:10px"><summary>Спецификация YAML</summary><div><pre x-text="obResult ? obResult.yaml : ''"></pre></div></details>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------- results ---------- -->
+  <div x-show="optimizeTab === 'results'" class="card"><h2>Запуски оптимизации</h2>
     <table class="t"><thead><tr><th>запуск</th><th>цель</th><th>лучшее</th><th>параметры</th></tr></thead><tbody>
       <template x-for="r in opts.results" :key="r.path"><tr>
-        <td><a :href="'#/opt?path=' + r.path" x-text="r.name"></a> <span class="badge warn" x-show="!r.finished">идёт</span></td>
+        <td><a :href="'#/opt?path=' + r.path" x-text="r.name"></a>
+          <span class="badge warn" x-show="!r.finished" x-text="r.progress && r.progress.planned ? 'идёт: ' + r.progress.done + ' / ≤' + r.progress.planned : 'идёт'"></span>
+          <div class="small muted" x-text="r.title"></div></td>
         <td class="small"><code x-text="r.objective"></code></td>
         <td class="num" x-text="r.best ? fmt(r.best.objective) + ' ± ' + fmt(r.best.objective_std) : '—'"></td>
-        <td><template x-for="a in r.aliases"><span class="chip" x-text="a + '=' + fmt(r.best ? r.best[a] : null)"></span></template></td></tr></template></tbody></table></div>
+        <td><template x-for="a in r.aliases"><span class="chip" x-text="a + '=' + fmt(r.best ? r.best[a] : null)"></span></template></td></tr></template></tbody></table>
+    <div class="empty" x-show="!opts.results.length">Запусков ещё нет — соберите спецификацию в конструкторе</div></div>
 </section>
 
 <section x-show="route.view === 'opt'">
   <template x-if="opt">
   <div>
-    <div class="topbar"><h1 x-text="opt.spec.title || opt.path"></h1><div class="spacer"></div>
+    <div class="topbar"><h1 x-text="opt.spec.title || opt.path"></h1>
+      <span class="badge warn" x-show="!opt.finished">идёт</span><div class="spacer"></div>
+      <button class="btn" x-show="opt.spec && opt.spec.space" @click="optToConstructor()">✎ В конструктор</button>
       <button class="btn primary" x-show="opt.best_path" @click="submit({kind:'run', config_path: opt.best_path, name: opt.spec.name + '_best'})">▶ Прогнать лучшую</button>
       <button class="btn" x-show="opt.best_path" @click="submit({kind:'vis', config_path: opt.best_path})">🧊 3D лучшей</button>
       <a class="btn" x-show="opt.best_path" :href="'/files/' + opt.best_path" download>best.yaml</a>
       <a class="btn" :href="'/api/export?fmt=xlsx&path=' + encodeURIComponent(opt.path)">⬇ Excel</a>
       <a class="btn" :href="'/api/export?fmt=zip&path=' + encodeURIComponent(opt.path)">⬇ ZIP</a></div>
+    <div class="card" x-show="!opt.finished" style="margin-bottom:14px">
+      <div class="row small"><b>Поиск идёт</b><span class="muted" x-text="opt.progress && opt.progress.planned ? 'испытаний ' + opt.progress.done + ' из не более ' + opt.progress.planned + (opt.progress.stage ? ', сейчас ступень ' + opt.progress.stage : '') : 'подготовка…'"></span>
+        <span class="right muted">страница обновляется сама</span></div>
+      <div class="progress" style="margin-top:6px"><i :style="'width:' + optProgress() + '%'"></i></div>
+    </div>
     <div class="grid g4">
       <div class="card kpi"><span class="v" x-text="optBest() ? fmt(optBest().objective) : '—'"></span><span class="l">цель (± <span x-text="optBest() ? fmt(optBest().objective_std) : '—'"></span>) — <code x-text="opt.spec.objective && opt.spec.objective.expr"></code></span></div>
       <div class="card kpi"><span class="v" x-text="opt.trials.length"></span><span class="l">испытаний, допустимых <span x-text="opt.trials.filter(t => t.feasible).length"></span></span></div>
@@ -413,7 +657,33 @@
       <div class="card"><div class="small muted">ограничения</div><template x-for="c in (opt.spec.constraints || [])"><span class="chip" x-text="c"></span></template></div>
     </div>
     <div class="tabs" style="margin-top:14px">
-      <template x-for="t in ['параметр → гистограммы','дашборд','испытания','геометрия лучшей','отчёт']"><a :class="{active: optTab === t}" @click="setOptTab(t)" x-text="t"></a></template>
+      <template x-for="t in ['метод и цель','параметр → гистограммы','дашборд','испытания','геометрия лучшей','отчёт']"><a :class="{active: optTab === t}" @click="setOptTab(t)" x-text="t"></a></template>
+    </div>
+    <div x-show="optTab === 'метод и цель'" class="grid g2">
+      <div class="card">
+        <h2>Что искали</h2>
+        <div class="small muted" x-text="opt.spec.description"></div>
+        <div class="ob-formula" x-html="optFormula()"></div>
+        <template x-for="m in optMetricsUsed()"><div class="small"><b x-text="m.label"></b> (<code x-text="m.name"></code>) — <span class="muted" x-text="m.help"></span></div></template>
+        <h3>Свободные параметры</h3>
+        <table class="t"><tbody><template x-for="[a, d] in Object.entries(opt.spec.space || {})"><tr>
+          <td><b x-text="a"></b></td><td class="small"><code x-text="d.path || '(виртуальный)'"></code></td>
+          <td class="small" x-text="d.values ? 'варианты: ' + d.values.join(', ') : 'от ' + d.low + ' до ' + d.high + (d.log ? ' (log)' : '') + (d.type === 'int' ? ', целые' : '')"></td>
+          <td class="num" x-text="optBest() ? fmt(optBest()[a]) : ''" title="лучшее значение"></td></tr></template></tbody></table>
+        <div class="small" style="margin-top:8px" x-show="Object.keys(opt.spec.derived || {}).length"><span class="muted">вычисляемые:</span>
+          <template x-for="[k, d] in Object.entries(opt.spec.derived || {})"><span class="chip" x-text="k + ' = ' + (d.expr || d) + (d.unit ? ' [' + d.unit + ']' : '')"></span></template></div>
+        <div class="small" style="margin-top:8px"><span class="muted">база:</span> <code x-text="opt.spec.base"></code>
+          <template x-for="[k, v] in Object.entries(opt.spec.set || {})"><span class="chip" x-text="k + ' = ' + JSON.stringify(v)"></span></template></div>
+      </div>
+      <div class="card">
+        <h2>Как искали</h2>
+        <ol class="ob-steps" x-show="opt.plan"><template x-for="s in (opt.plan || {}).steps || []"><li><span x-text="s.text"></span>
+          <span class="n" x-text="optStageDone(s)"></span></li></template></ol>
+        <div class="small muted" x-show="opt.plan" x-text="'План: не более ' + fmt((opt.plan || {}).sims) + ' симуляций, ' + fmt((opt.plan || {}).events) + ' событий. Фактически: ' + optRealSims() + ' симуляций (повторы одинаковых точек берутся из кэша).'"></div>
+        <div class="infobox" style="margin-top:10px">Почему так: на малой статистике оценка цели шумная, поэтому много кандидатов
+          сначала грубо сравниваются, а точно считаются только лучшие (successive halving). Уточнение двигает лучшую точку
+          по одному параметру за раз, а повторы с новыми seed показывают разброс (± σ), чтобы победитель не оказался случайным.</div>
+      </div>
     </div>
     <div x-show="optTab === 'параметр → гистограммы'">
       <div class="card" style="margin-bottom:14px">

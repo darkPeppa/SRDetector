@@ -26,15 +26,19 @@ Spec:
       seed: 1
     quick: {initial: 6, events: [50, 150], refine: null, final: {top: 1, events: 200, repeats: 2}}
 
-Expressions are plain Python over metric names (see analysis.metrics), parameter aliases and
-math functions (log, exp, sqrt, min, max, abs). A missing / NaN metric makes a trial infeasible.
+Expressions are arithmetic over metric names (see analysis.metrics), parameter aliases and math
+functions (log, exp, sqrt, min, max, abs); they are parsed with a whitelist (no attributes, no
+indexing, no other calls), so specs written in the web UI cannot run code. A missing / NaN metric
+makes a trial infeasible.
 
 Output: runs/optimize/<stamp>_<name>/ trials.csv, best.yaml, report.md, plots/*.png, runs/...
 """
 from __future__ import annotations
 
+import ast
 import copy
 import datetime as dt
+import functools
 import itertools
 import json
 import math
@@ -54,6 +58,8 @@ BASE_UNIT = {"length": "mm", "energy": "keV", "angle": "deg"}
 SAFE = {"log": math.log, "log10": math.log10, "exp": math.exp, "sqrt": math.sqrt, "min": min, "max": max,
         "abs": abs, "pi": math.pi}
 MIN_WALL_MM = 0.001  # cells must keep at least 1 um of glass between coatings
+SAMPLERS = ("lhs", "random", "grid")
+NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,59}")
 
 Evaluator = Callable[[dict, str, Path], dict]  # (config, name, parent dir) -> metrics ({} if failed)
 
@@ -108,16 +114,28 @@ def parse_space(space: dict) -> list[Param]:
     for alias, d in space.items():
         if not re.fullmatch(r"[A-Za-z_]\w*", alias):
             raise ValueError(f"parameter alias {alias!r} must be an identifier")
+        if not isinstance(d, dict):
+            raise ValueError(f"{alias}: expected a mapping (path / low / high or values)")
         if "values" in d:
+            if not d["values"]:
+                raise ValueError(f"{alias}: empty list of values")
             out.append(Param(alias, d.get("path"), "choice", values=list(d["values"])))
             continue
+        if "low" not in d or "high" not in d:
+            raise ValueError(f"{alias}: needs low and high (or values)")
         lo, k1 = _quantity(d["low"])
         hi, k2 = _quantity(d["high"])
+        if k1 and k2 and k1 != k2:
+            raise ValueError(f"{alias}: low is a {k1}, high is a {k2}")
         if hi <= lo:
             raise ValueError(f"{alias}: high must exceed low")
+        log = bool(d.get("log", False))
+        if log and lo <= 0:
+            raise ValueError(f"{alias}: a log scale needs low > 0")
         kind = d.get("type", "float")
-        out.append(Param(alias, d.get("path"), kind, lo, hi, bool(d.get("log", False)), k1 or k2,
-                         steps=int(d.get("steps", 3))))
+        if kind not in ("float", "int"):
+            raise ValueError(f"{alias}: type must be float or int")
+        out.append(Param(alias, d.get("path"), kind, lo, hi, log, k1 or k2, steps=max(2, int(d.get("steps", 3)))))
     return out
 
 
@@ -152,8 +170,42 @@ def sample(params: list[Param], n: int, method: str, rng: np.random.Generator) -
 
 
 # ------------------------------------------------------------------ expressions
+_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.IfExp, ast.Call, ast.Name,
+          ast.Load, ast.Constant, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.USub,
+          ast.UAdd, ast.Not, ast.And, ast.Or, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In,
+          ast.NotIn, ast.Tuple, ast.List)
+
+
+@functools.lru_cache(maxsize=1024)
+def compile_expr(expr: str):
+    """Parse an objective / constraint / derived expression; only arithmetic, comparisons, names and
+    calls of the SAFE functions are accepted."""
+    try:
+        tree = ast.parse(str(expr).strip(), mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"syntax error in {expr!r}: {e.msg}") from None
+    for node in ast.walk(tree):
+        if not isinstance(node, _NODES):
+            raise ValueError(f"{type(node).__name__} is not allowed in {expr!r}")
+        if isinstance(node, ast.Name) and node.id.startswith("_"):
+            raise ValueError(f"name {node.id!r} is not allowed")
+        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name) and callable(SAFE.get(node.func.id))
+                                               and not node.keywords):
+            raise ValueError(f"only {', '.join(k for k, v in SAFE.items() if callable(v))} can be called in {expr!r}")
+        if isinstance(node, ast.Constant) and not isinstance(node.value, (int, float, str, bool)):
+            raise ValueError(f"constant {node.value!r} is not allowed")
+    return compile(tree, "<spec expression>", "eval")
+
+
+def expr_names(expr: str) -> set[str]:
+    """Metric / parameter names an expression refers to (function names excluded)."""
+    compile_expr(expr)
+    tree = ast.parse(str(expr).strip(), mode="eval")
+    return {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id not in SAFE}
+
+
 def safe_eval(expr: str, names: dict) -> Any:
-    return eval(expr, {"__builtins__": {}}, {**SAFE, **names})  # noqa: S307 - user-authored spec
+    return eval(compile_expr(expr), {"__builtins__": {}}, {**SAFE, **names})  # noqa: S307 - whitelisted AST
 
 
 def _num(x) -> float:
@@ -169,20 +221,23 @@ class Optimizer:
     def __init__(self, spec: dict, quick: bool = False, evaluator: Evaluator | None = None,
                  out_dir: Path | None = None, extra_sets: list[str] | None = None):
         self.spec = copy.deepcopy(spec)
-        search = dict(self.spec.get("search", {}))
-        if quick:
-            search.update(self.spec.get("quick") or {"initial": 6, "events": [50, 150], "refine": None,
-                                                     "final": {"top": 1, "events": 200, "repeats": 2}})
-        self.search = search
+        # --set overrides become part of the spec, so spec.yaml (resume, scans) keeps them
+        fixed = dict(self.spec.get("set") or {})
+        for s in extra_sets or []:
+            if "=" not in s:
+                raise ValueError(f"--set expects key=value, got {s!r}")
+            k, v = s.split("=", 1)
+            fixed[k.strip()] = C.parse_scalar(v.strip())
+        self.spec["set"] = fixed
+        self.search = effective_search(self.spec, quick)
         self.params = parse_space(self.spec["space"])
         self.objective = self.spec["objective"]
         self.maximize = self.objective.get("direction", "maximize").startswith("max")
         self.constraints = list(self.spec.get("constraints", []))
-        self.rng = np.random.default_rng(int(search.get("seed", 1)))
+        self.rng = np.random.default_rng(int(self.search.get("seed", 1)))
         self.base = C.load(self.spec["base"]) if isinstance(self.spec["base"], str) else copy.deepcopy(self.spec["base"])
-        for k, v in (self.spec.get("set") or {}).items():
+        for k, v in fixed.items():
             C.set_path(self.base, k, v)
-        self.base = C.apply_sets(self.base, extra_sets)
         self.evaluator = evaluator or default_evaluator
         name = self.spec["name"]
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -190,22 +245,12 @@ class Optimizer:
         (self.dir / "runs").mkdir(parents=True, exist_ok=True)
         self.trials: list[dict] = []
         self._cache: dict[tuple, dict] = {}
+        self._planned = plan_search(self.params, self.search)["sims"]
         self._load_existing()
 
     # ---------------- configuration of one candidate
     def config_for(self, point: dict) -> tuple[dict | None, str]:
-        cfg = copy.deepcopy(self.base)
-        for p in self.params:
-            if p.path:
-                C.set_path(cfg, p.path, p.value_to_config(point[p.alias]))
-        names = {k: (v if isinstance(v, str) else float(v)) for k, v in point.items()}
-        for path, d in (self.spec.get("derived") or {}).items():
-            d = d if isinstance(d, dict) else {"expr": d}
-            v = safe_eval(d["expr"], names)
-            unit = d.get("unit")
-            C.set_path(cfg, path, f"{v:.6g} {unit}" if unit else v)
-        reason = geometry_problem(cfg)
-        return (None, reason) if reason else (cfg, "")
+        return build_config(self.base, self.params, self.spec.get("derived"), point)
 
     # ---------------- evaluation with caching / resume
     def _key(self, cfg: dict, events: int, seed: int) -> tuple:
@@ -257,7 +302,7 @@ class Optimizer:
         viol = []
         try:
             obj = float(safe_eval(self.objective["expr"], names))
-        except (NameError, ZeroDivisionError, ValueError, TypeError) as e:
+        except (NameError, ArithmeticError, ValueError, TypeError) as e:  # missing metric, log(0), 1/0 ...
             return float("nan"), False, [f"objective: {e}"]
         if not math.isfinite(obj):
             viol.append("objective is NaN")
@@ -265,13 +310,21 @@ class Optimizer:
             try:
                 if not safe_eval(c, names):
                     viol.append(c)
-            except (NameError, ZeroDivisionError, TypeError) as e:
+            except (NameError, ArithmeticError, ValueError, TypeError) as e:
                 viol.append(f"{c} ({e})")
         return obj, not viol, viol
 
     def _append(self, rec: dict):
         self.trials.append(rec)
         pd.DataFrame(self.trials).to_csv(self.dir / "trials.csv", index=False)
+        self._progress(stage=str(rec.get("stage", "")))
+
+    def _progress(self, **extra):
+        """progress.json: what the web UI shows while the search is running."""
+        done = sum(1 for t in self.trials if not str(t.get("stage", "")).startswith("scan_"))
+        info = {"done": done, "planned": self._planned, "updated": dt.datetime.now().isoformat(timespec="seconds"),
+                "finished": False, **extra}
+        (self.dir / "progress.json").write_text(json.dumps(info))
 
     def _fmt(self, point: dict) -> str:
         return ", ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}" for k, v in point.items())
@@ -284,9 +337,13 @@ class Optimizer:
     # ---------------- search
     def run(self) -> Path:
         s = self.search
-        (self.dir / "spec.yaml").write_text(yaml.safe_dump({k: v for k, v in self.spec.items()
-                                                            if not k.startswith("_")}, sort_keys=False,
-                                                           allow_unicode=True))
+        # the search actually used (quick budget included) is what a resume must repeat
+        saved = {k: v for k, v in self.spec.items() if not k.startswith("_")}
+        saved["search"] = copy.deepcopy(s)
+        (self.dir / "spec.yaml").write_text(yaml.safe_dump(saved, sort_keys=False, allow_unicode=True))
+        # resume: previous trials stay in the cache and are re-appended in order as the search
+        # reaches them again (no duplicates in trials.csv); one-parameter scans are kept as they are
+        self.trials = [t for t in self.trials if str(t.get("stage", "")).startswith("scan_")]
         seed0 = int(s.get("seed", 1)) * 100000
         events = [int(e) for e in s.get("events", [300])]
         points = sample(self.params, int(s.get("initial", 12)), s.get("sampler", "lhs"), self.rng)
@@ -398,7 +455,10 @@ class Optimizer:
                 row[f"{c}_std"] = vals.std(ddof=1) if len(vals) > 1 else 0.0
             rows.append(row)
         out = pd.DataFrame(rows)
-        return out.sort_values("objective", ascending=not self.maximize).reset_index(drop=True)
+        # candidates that violated a constraint in any repeat never come before feasible ones
+        out["_rank"] = ~out["feasible_all"]
+        out = out.sort_values(["_rank", "objective"], ascending=[True, not self.maximize], na_position="last")
+        return out.drop(columns="_rank").reset_index(drop=True)
 
     def report(self) -> Path:
         from .optimize_plots import convergence, pareto, sensitivity
@@ -419,8 +479,11 @@ class Optimizer:
         else:
             best_rec = self._rank(self.trials)[0]
             best_row, best_pt = pd.Series(best_rec), self._point(best_rec)
-        cfg, _ = self.config_for(best_pt)
-        best_yaml = self.write_best(cfg, best_row)
+        n_feasible = int(df["feasible"].astype(bool).sum()) if "feasible" in df else 0
+        cfg, why_not = self.config_for(best_pt)
+        best_yaml = self.write_best(cfg, best_row) if cfg is not None else None
+        if best_yaml is None:
+            (self.dir / "best.yaml").unlink(missing_ok=True)
 
         aliases = [p.alias for p in self.params]
         key_metrics = [m for m in dict.fromkeys(self.spec.get("report_metrics", []) +
@@ -434,10 +497,15 @@ class Optimizer:
                  f"* Objective: `{self.objective['expr']}` ({'maximise' if self.maximize else 'minimise'})",
                  f"* Constraints: {', '.join(f'`{c}`' for c in self.constraints) or 'none'}",
                  f"* Search: `{ {k: v for k, v in self.search.items()} }`",
-                 f"* Simulations: {n_runs}, feasible: {int(df['feasible'].sum())} / {len(df)}", "",
-                 "## Best configuration", "",
-                 "Validated with independent seeds (mean ± std):" if len(summary) else
-                 "Best trial of the last stage (no validation stage):", ""]
+                 f"* Simulations: {n_runs}, feasible: {n_feasible} / {len(df)}", "",
+                 "## Метод поиска", ""] + [f"{i}. {st['text']}" for i, st in
+                                           enumerate(plan_search(self.params, self.search)["steps"], 1)] + [""]
+        if not n_feasible:
+            lines += ["> **No trial satisfied the constraints.** The configuration below is the least bad "
+                      "one; relax the constraints or widen the parameter ranges.", ""]
+        lines += ["## Best configuration", "",
+                  "Validated with independent seeds (mean ± std):" if len(summary) else
+                  "Best trial of the last stage (no validation stage):", ""]
         for a in aliases:
             lines.append(f"* **{a}** = {best_row[a]}")
         for mname in ["objective"] + key_metrics:
@@ -446,8 +514,11 @@ class Optimizer:
                 lines.append(f"* {mname} = {_num(best_row[mname]):.4g}" +
                              (f" ± {_num(std):.2g}" if std is not None and math.isfinite(_num(std)) else ""))
         from .paths import repo_root
-        rel = best_yaml.relative_to(repo_root()) if best_yaml.is_relative_to(repo_root()) else best_yaml
-        lines += ["", f"Ready-to-run configuration: [`best.yaml`](best.yaml) (`srdet run {rel}`)", ""]
+        if best_yaml is not None:
+            rel = best_yaml.relative_to(repo_root()) if best_yaml.is_relative_to(repo_root()) else best_yaml
+            lines += ["", f"Ready-to-run configuration: [`best.yaml`](best.yaml) (`srdet run {rel}`)", ""]
+        else:
+            lines += ["", f"No `best.yaml`: the best point is not a valid geometry ({why_not}).", ""]
         if len(summary):
             cols = aliases + ["objective", "objective_std"] + [m for m in key_metrics if m in summary]
             lines += ["## Validated candidates", "", summary[cols].to_markdown(index=False, floatfmt=".4g"), ""]
@@ -466,6 +537,7 @@ class Optimizer:
                   "* Infeasible trials (violated constraints, impossible geometry) are kept in `trials.csv` "
                   "with the reason in `violations`.", ""]
         (self.dir / "report.md").write_text("\n".join(lines))
+        self._progress(finished=True)
         print(f"[srdet] optimize done: {self.dir / 'report.md'}")
         return self.dir
 
@@ -488,6 +560,218 @@ class Optimizer:
 
 
 # ------------------------------------------------------------------ helpers
+DEFAULT_QUICK = {"initial": 6, "events": [50, 150], "refine": None, "final": {"top": 1, "events": 200, "repeats": 2}}
+SAMPLER_TEXT = {"lhs": "латинским гиперкубом (по каждой непрерывной оси ровно одна точка на интервал, "
+                       "категории поровну, внутри каждой категории — весь диапазон)",
+                "random": "случайно, равномерно в диапазонах", "grid": "полным перебором сетки"}
+
+
+def effective_search(spec: dict, quick: bool = False) -> dict:
+    search = dict(spec.get("search") or {})
+    if quick:
+        search.update(spec.get("quick") or DEFAULT_QUICK)
+    return search
+
+
+def build_config(base: dict, params: list[Param], derived: dict | None, point: dict) -> tuple[dict | None, str]:
+    """Configuration of one candidate; (None, reason) when its geometry cannot be built."""
+    cfg = copy.deepcopy(base)
+    for p in params:
+        if p.path:
+            C.set_path(cfg, p.path, p.value_to_config(point[p.alias]))
+    names = {k: (v if isinstance(v, str) else float(v)) for k, v in point.items()}
+    for path, d in (derived or {}).items():
+        d = d if isinstance(d, dict) else {"expr": d}
+        v = safe_eval(d["expr"], names)
+        unit = d.get("unit")
+        C.set_path(cfg, path, f"{v:.6g} {unit}" if unit else v)
+    reason = geometry_problem(cfg)
+    return (None, reason) if reason else (cfg, "")
+
+
+def _n(x) -> str:
+    return f"{int(x):,}".replace(",", " ")
+
+
+def plan_search(params: list[Param], search: dict) -> dict:
+    """The search as a list of stages with simulation counts and a plain-language description
+    (shown in the web UI before the launch and in report.md)."""
+    sampler = search.get("sampler", "lhs")
+    if sampler == "grid":
+        n = math.prod(len(p.values) if p.kind == "choice" else p.steps for p in params) if params else 1
+    else:
+        n = int(search.get("initial", 12))
+    events = [int(e) for e in search.get("events", [300])] or [300]
+    eta = float(search.get("eta", 3))
+    steps, sims, total = [], 0, 0
+    for k, ev in enumerate(events):
+        if k == 0:
+            text = f"Отбор: {_n(n)} кандидатов, выбранных {SAMPLER_TEXT.get(sampler, sampler)}, по {_n(ev)} событий."
+        else:
+            text = (f"Отсев: лучшие {_n(n)} (доля 1/{eta:g} предыдущей ступени, допустимые впереди) пересчитываются "
+                    f"с {_n(ev)} событий и новыми seed — шумные оценки малой статистики отсеивают только явно плохих.")
+        steps.append({"id": f"s{k}", "kind": "screen" if k == 0 else "halving", "candidates": n, "events": ev,
+                      "sims": n, "text": text})
+        sims, total = sims + n, total + n * ev
+        if k < len(events) - 1:
+            n = max(1, math.ceil(n / eta))
+    ref = search.get("refine")
+    if ref:
+        moves = sum(len(p.values) - 1 for p in params if p.kind == "choice") + \
+            2 * sum(1 for p in params if p.kind != "choice")
+        it, ev = int(ref.get("iterations", 6)), int(ref.get("events", events[-1]))
+        m = (1 if ev != events[-1] else 0) + it * moves
+        steps.append({"id": "refine", "kind": "refine", "candidates": m, "events": ev, "sims": m,
+                      "text": f"Уточнение вокруг лучшей точки, до {it} итераций: пробуются другие значения каждой "
+                              f"категории и ±{float(ref.get('step', 0.2)):g} диапазона по каждой непрерывной оси "
+                              f"(для log-осей — в логарифме). Шаг принимается, если цель выросла больше чем на "
+                              f"{100 * float(ref.get('min_gain', 0.03)):g} %, иначе шаг уменьшается вдвое. "
+                              f"Не более {_n(m)} симуляций по {_n(ev)} событий."})
+        sims, total = sims + m, total + m * ev
+    fin = search.get("final") or {}
+    top = int(fin.get("top", 0) or 0)
+    if top:
+        rep, ev = int(fin.get("repeats", 3)), int(fin.get("events", events[-1]))
+        steps.append({"id": "final", "kind": "final", "candidates": top * rep, "events": ev, "sims": top * rep,
+                      "text": f"Проверка: {top} лучших различных кандидатов × {rep} повтора с новыми seed по "
+                              f"{_n(ev)} событий. Итог — среднее ± σ; best.yaml берётся по проверке."})
+        sims, total = sims + top * rep, total + top * rep * ev
+    else:
+        steps.append({"id": "final", "kind": "final", "candidates": 0, "events": 0, "sims": 0,
+                      "text": "Проверки повторами нет: лучший берётся из последней ступени (оценка шумнее)."})
+    return {"steps": steps, "sims": sims, "events": total}
+
+
+def _known_metric(name: str) -> bool:
+    from .labels import METRIC_HELP
+    return name in METRIC_HELP or bool(re.match(r"(first_|mean_|fate_|coat_)\w+$", name))
+
+
+_MISSING = object()
+
+
+def check_spec(spec: dict, quick: bool = False) -> dict:
+    """Validate a spec without simulating: errors block the launch, warnings are hints.
+    Also returns the search plan (stages, simulations, events)."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    defaults = C.load(None)
+    name = str(spec.get("name") or "")
+    if not NAME_RE.fullmatch(name):
+        errors.append("name: латиница, цифры, _ и -, до 60 символов (это имя папки результата)")
+    base = None
+    if not spec.get("base"):
+        errors.append("base: выберите базовую конфигурацию детектора")
+    else:
+        try:
+            base = C.load(spec["base"]) if isinstance(spec["base"], str) else copy.deepcopy(spec["base"])
+        except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
+            errors.append(f"base: {e}")
+    for k, v in (spec.get("set") or {}).items():
+        if C.get_path(defaults, k, _MISSING) is _MISSING:
+            warnings.append(f"фиксированный параметр {k} не найден в defaults.yaml — опечатка?")
+        if base is not None:
+            C.set_path(base, k, v)
+    params: list[Param] = []
+    space_ok = True
+    try:
+        params = parse_space(spec.get("space") or {})
+        if not params:
+            errors.append("space: нужен хотя бы один свободный параметр")
+    except (ValueError, KeyError, TypeError) as e:
+        errors.append(f"space: {e}")
+        space_ok = False
+    aliases = {p.alias for p in params}
+    derived = spec.get("derived") or {}
+    used_in_derived: set[str] = set()
+    for path, d in derived.items():
+        expr = d.get("expr") if isinstance(d, dict) else d
+        try:
+            names = expr_names(expr)
+            used_in_derived |= names
+            if space_ok and names - aliases:
+                errors.append(f"derived {path}: неизвестные имена {sorted(names - aliases)} (можно только параметры)")
+        except ValueError as e:
+            errors.append(f"derived {path}: {e}")
+        if C.get_path(defaults, path, _MISSING) is _MISSING:
+            warnings.append(f"derived {path}: такого ключа нет в defaults.yaml")
+    for p in params:
+        if p.path and C.get_path(defaults, p.path, _MISSING) is _MISSING:
+            warnings.append(f"{p.alias}: ключа {p.path} нет в defaults.yaml — значение ни на что не повлияет")
+        if not p.path and p.alias not in used_in_derived:
+            warnings.append(f"{p.alias}: параметр без path не используется в derived — он ничего не меняет")
+    if any(p.path == "run.events" for p in params):
+        warnings.append("run.events задаётся ступенями поиска, свободный параметр будет перезаписан")
+    obj = spec.get("objective") or {}
+    expr_list = []
+    if not obj.get("expr"):
+        errors.append("objective: задайте выражение цели")
+    else:
+        expr_list.append(("цель", obj["expr"]))
+    if str(obj.get("direction", "maximize"))[:3] not in ("max", "min"):
+        errors.append("objective.direction: maximize или minimize")
+    for c in spec.get("constraints") or []:
+        expr_list.append(("ограничение", c))
+        try:
+            tree = ast.parse(str(c).strip(), mode="eval")
+            if not isinstance(tree.body, (ast.Compare, ast.BoolOp)):
+                warnings.append(f"ограничение {c!r} не является сравнением (нужно, например, 'psf_r50_um <= 120')")
+        except SyntaxError:
+            pass
+    for what, e in expr_list:
+        try:
+            for n in sorted(expr_names(e) - aliases):
+                if not _known_metric(n):
+                    warnings.append(f"{what} {e!r}: неизвестная метрика {n} — без неё испытание будет недопустимым")
+        except ValueError as err:
+            errors.append(f"{what}: {err}")
+    par = spec.get("pareto")
+    if par:
+        for ax in ("x", "y"):
+            if not par.get(ax):
+                errors.append(f"pareto.{ax}: выберите метрику")
+            elif not _known_metric(par[ax]):
+                warnings.append(f"pareto.{ax}: неизвестная метрика {par[ax]}")
+    search = effective_search(spec, quick)
+    if search.get("sampler", "lhs") not in SAMPLERS:
+        errors.append(f"search.sampler: одно из {', '.join(SAMPLERS)}")
+    try:
+        events = [int(e) for e in search.get("events", [300])]
+        if not events or min(events) < 1:
+            errors.append("search.events: положительные числа событий по ступеням")
+        elif any(b < a for a, b in zip(events, events[1:])):
+            warnings.append("search.events: статистика обычно растёт от ступени к ступени")
+        if len(events) > 1 and float(search.get("eta", 3)) <= 1:
+            errors.append("search.eta должно быть > 1 (во сколько раз сокращается число кандидатов)")
+        if search.get("sampler", "lhs") != "grid" and int(search.get("initial", 12)) < 1:
+            errors.append("search.initial: хотя бы один кандидат")
+        plan = plan_search(params, search)
+    except (TypeError, ValueError) as e:
+        errors.append(f"search: {e}")
+        plan = {"steps": [], "sims": 0, "events": 0}
+    if search.get("sampler") == "grid" and plan["steps"] and plan["steps"][0]["candidates"] > 300:
+        warnings.append(f"сетка из {plan['steps'][0]['candidates']} точек — это долго; уменьшите steps или значения")
+    invalid = None
+    if base is not None and params and not errors:
+        pts = sample(params, 24, "lhs" if search.get("sampler") != "grid" else "grid", np.random.default_rng(0))
+        bad = []
+        for pt in pts:
+            try:
+                cfg, why = build_config(base, params, derived, pt)
+            except (ValueError, ArithmeticError, TypeError, NameError) as e:
+                cfg, why = None, str(e)
+            if cfg is None:
+                bad.append(why)
+        invalid = len(bad) / max(1, len(pts))
+        if bad and len(bad) == len(pts):
+            errors.append(f"ни одна пробная точка не даёт допустимую геометрию: {bad[0]}")
+        elif bad:
+            warnings.append(f"{len(bad)} из {len(pts)} пробных точек — невозможная геометрия ({bad[0]}); "
+                            "они не симулируются, но тратят место в отборе")
+    return {"ok": not errors, "errors": errors, "warnings": warnings, "plan": plan, "search": search,
+            "invalid_fraction": invalid}
+
+
 def geometry_problem(cfg: dict) -> str:
     g = cfg["geometry"]
     if g.get("mode") == "slab":

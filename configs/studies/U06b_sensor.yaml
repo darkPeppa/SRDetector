@@ -5,6 +5,14 @@ description: >
   is applied on the sensor surface; read noise, pixel pitch and relative cost come from the
   catalogue (typical data-sheet values). Figures of merit: detected photo-electrons per keV,
   SNR for a 60 keV photon in one channel, and photo-electrons per keV per unit cost.
+explain:
+  question: "Какой фотоприёмник выбрать с учётом сигнала, шума и цены?"
+  why: >
+    Один канал CsI(Tl), рентген 60 кэВ: так в сигнал входят и поглощение, и транспорт света, и QE
+    сенсора. Список охватывает все технологии каталога — от дешёвой a-Si панели до EMCCD; ideal (QE = 1)
+    служит верхней границей.
+  expect: "Дорогие BSI-сенсоры дают больше фотоэлектронов, a-Si — лучше по сигналу на единицу цены; ФЭУ плохо согласован с зелёным светом CsI(Tl)."
+  read: "Смотрите det_yield_per_keV относительно ideal и det_yield_per_cost; SNR учитывает шум чтения одного канала."
 base: unit_xray.yaml
 scan:
   geometry.sensor: [ideal, aSi_FPD, CMOS_FSI, sCMOS_BSI, SiPM, PMT_bialkali, EMCCD]
