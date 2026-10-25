@@ -1,0 +1,93 @@
+name: cluster7_xray
+description: Full cylindrical honeycomb detector, CsI(Tl) channels with Al coating
+  (legacy dimensions).
+geometry:
+  mode: cluster7
+  detector_radius: 11 mm
+  length: 30 mm
+  pitch: 208 um
+  channel_diameter: 200 um
+  channel_shape: circle
+  wall_material: LeadGlass_MCP
+  matrix_material: ''
+  core_material: CsI_Tl
+  coating_thickness: 2 um
+  coating_material: ''
+  world_material: Air
+  housing_material: G4_Al
+  housing_thickness: 1 mm
+  window_material: G4_Be
+  window_thickness: 0.5 mm
+  coupling_material: OpticalGrease
+  coupling_thickness: 50 um
+  sensor: aSi_FPD
+  sensor_window_thickness: -1 mm
+  sensor_active_thickness: 20 um
+  slab_material: CsI_Tl
+  slab_thickness: 1 mm
+  slab_half_xy: 50 mm
+  world_margin: 50 mm
+  check_overlaps: false
+optics:
+  coating: Al
+  coating_reflectivity: 0.9
+  coating_sigma_alpha: 0 deg
+  film_thickness: 0.5 um
+  entrance_coating: Al
+materials:
+  yield_scale: 0.1
+  overrides: []
+physics:
+  em: livermore
+  radioactive: false
+  fluo: true
+  auger: true
+  pixe: false
+  deexcitation_ignore_cut: true
+  low_edge: 250 eV
+  cut_world: 0.1 mm
+  cut_detector: 1 um
+  optical:
+    scintillation: true
+    cerenkov: true
+    absorption: true
+    rayleigh: true
+    mie: false
+    boundary: true
+    wls: false
+    cerenkov_max_photons: 100
+    cerenkov_max_beta_change: 10
+    track_secondaries_first: true
+    finite_rise_time: false
+beam:
+  type: parallel
+  particle: gamma
+  energy: 60 keV
+  spectrum: null
+  position:
+  - 0 mm
+  - 0 mm
+  radius: 0.104 mm
+  sigma: 1 mm
+  half_angle: 5 deg
+  distance: 100 mm
+  optical:
+    n: 1000
+    energy: 0 eV
+    z: 0 mm
+    z_uniform: true
+    r_uniform: true
+    theta: -1 deg
+  macro: null
+run:
+  events: 2000
+  threads: 0
+  seed: 12345
+  photon_fraction: 0.2
+  cell_hits: true
+  gdml: false
+  tracks: 20
+  tracks_optical_every: 50
+  histograms: auto
+  extra_commands: []
+  post_commands: []
