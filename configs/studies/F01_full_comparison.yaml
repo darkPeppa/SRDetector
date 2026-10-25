@@ -3,6 +3,14 @@ title: "F1 - full detector: baseline vs optimised variants (60 keV, parallel bea
 description: >
   Candidate full-detector configurations built from the single-parameter studies, compared on
   the same beam: detection efficiency, light yield, resolution limit, cross-talk and cost figures.
+explain:
+  question: "Насколько лучше становится полный детектор, если применить выводы единичных исследований?"
+  why: >
+    Варианты собраны из выводов U01–U09: исходная конструкция (Al, L = 30 мм), материалы legacy-кода,
+    лучшие покрытия, короткие каналы L = 2 мм, более толстая стенка и другой сенсор. Все — на одном
+    пучке, чтобы сравнение было честным.
+  expect: "Короткие каналы с Ag дают на порядки больше света, чем исходная конструкция."
+  read: "Сравнивайте варианты попарно: каждый отличается от соседнего одним-двумя изменениями."
 base: full.yaml
 variants:
   - label: baseline_Al_L30

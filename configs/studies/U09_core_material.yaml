@@ -3,6 +3,16 @@ title: "U9 - scintillator in the channels"
 description: >
   Same geometry, different scintillators (yield, density, refractive index, emission band).
   60 keV pencil beam into one channel read by an a-Si flat panel.
+explain:
+  question: "Какой сцинтиллятор поставить в каналы?"
+  why: >
+    Одна геометрия, один пучок (60 кэВ в один канал, a-Si панель), меняется только материал. Список —
+    все сцинтилляторы каталога: яркие (CsI, GAGG, NaI), быстрые (LYSO, EJ200, чистый CsI), плотные
+    (BGO, LYSO). yield_scale 0.1 ускоряет счёт, результаты пересчитываются на полный выход.
+  expect: >
+    CsI(Tl) и GAGG ярче всех, GAGG намного быстрее; у LYSO и BGO почти нет K-escape при 60 кэВ
+    (их K-края выше), поэтому фотопик выше.
+  read: "det_yield_per_keV — свет, photopeak_fraction — спектрометрия, t_det_median_ns — скорость."
 base: unit_xray.yaml
 set: {materials.yield_scale: 0.1}
 scan:

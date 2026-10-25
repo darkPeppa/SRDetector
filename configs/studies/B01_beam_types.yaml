@@ -3,6 +3,14 @@ title: "B1 - beam geometries on the full detector (60 keV)"
 description: >
   Pencil, uniform parallel (r = 10 mm), Gaussian (sigma = 1 mm), divergent cone (5 deg from
   100 mm) and an isotropic point source 100 mm in front of the window.
+explain:
+  question: "Как результат зависит от формы пучка на полном детекторе?"
+  why: >
+    Пять типовых геометрий облучения при одной энергии 60 кэВ: узкий луч, широкий параллельный,
+    гауссов, расходящийся конус и изотропный точечный источник. Проверяет, что выводы, полученные
+    на узком луче, переносятся на реальное облучение.
+  expect: "Направленные пучки дают близкие результаты; изотропный источник почти не попадает в детектор (телесный угол)."
+  read: "interacting_fraction — попадание в детектор, остальное — качество регистрации попавших."
 base: full.yaml
 scan:
   beam.type: [pencil, parallel, gauss, divergent, isotropic]

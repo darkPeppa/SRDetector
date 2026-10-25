@@ -61,7 +61,9 @@ class JobManager:
         out = dict(job)
         log = Path(job["log"])
         out["log_tail"] = "\n".join(log.read_text(errors="replace").splitlines()[-tail:]) if log.exists() else ""
-        out["result"] = job.get("result") or self._result(out["log_tail"])
+        # while a study / optimisation runs, its log only names the individual point runs
+        out["result"] = None if job["status"] in ("queued", "running") else \
+            job.get("result") or self._result(out["log_tail"])
         return out
 
     def list(self) -> list[dict]:
@@ -130,7 +132,7 @@ class JobManager:
             hits = pat.findall(text)
             if hits:
                 p = hits[-1]
-                p = p.replace("/work/", "") if p.startswith("/work/") else p
+                p = p[len("/work/"):] if p.startswith("/work/") else p  # container path -> repo-relative
                 return os.path.relpath(p, root) if p.startswith(root) else p
         return None
 

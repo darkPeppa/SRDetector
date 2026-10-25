@@ -11,6 +11,25 @@ const HIST_LABELS = {
   n_cells_hit: 'Число сработавших сот',
 };
 const JSROOT_URL = 'https://cdn.jsdelivr.net/npm/jsroot@7.7.4/modules/main.mjs';
+const OBJECTIVE_PRESETS = [
+  { title: 'свет × эффективность', expr: 'det_yield_per_keV * detection_efficiency', dir: 'maximize' },
+  { title: 'свет в фотопике', expr: 'det_yield_per_keV * photopeak_fraction', dir: 'maximize' },
+  { title: 'свет на цену', expr: 'det_yield_per_cost', dir: 'maximize' },
+  { title: 'разрешение', expr: 'resolution_fwhm_poisson_limit', dir: 'minimize' },
+];
+const OP_TEXT = { '<=': '≤', '>=': '≥', '<': '<', '>': '>', '==': '=', '!=': '≠' };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// "60 keV" -> [60, 'keV']; numbers -> [n, '']
+const splitQty = v => { const m = /^\s*([-+0-9.eE]+)\s*([A-Za-z]*)\s*$/.exec(String(v ?? '')); return m ? [m[1], m[2] || ''] : [String(v ?? ''), '']; };
+function emptyOb() {
+  return { preset: '', name: 'my_opt', title: '', description: '', base: 'full.yaml', fixed: [], params: [], derived: [],
+           objective: 'det_yield_per_keV * detection_efficiency', direction: 'maximize', constraints: [],
+           pareto: { on: false, x: 'psf_r50_um', x_dir: 'min', y: 'det_yield_per_keV', y_dir: 'max' }, report: [],
+           search: { sampler: 'lhs', initial: 16, events: '300, 1200', eta: 3, seed: 1, refineOn: true,
+                     refine: { iterations: 3, events: 1200, step: 0.15, min_gain: 0.03 }, finalOn: true,
+                     final: { top: 2, events: 3000, repeats: 3 } },
+           quickSpec: null, quick: false, archive: false };
+}
 
 async function api(url, opts = {}) {
   const r = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -63,7 +82,10 @@ function app() {
     selected: [], compareRows: [], compareMetrics: ['det_yield_per_keV', 'detection_efficiency', 'psf_in_cell_fraction'],
     study: null, studyX: '', studyY: '', studySeries: '',
     HIST_LABELS, scanParam: '', scanHist: 'n_det', scanMetric: '', scanNorm: true, scanLog: false, scanNoZero: true, scanPoints: 6, scanNote: '', scanSummary: '',
-    opt: null, optTab: 'параметр → гистограммы', optParam: '', onlyFeasible: false, trialSort: { col: 'trial', asc: true },
+    opt: null, optTab: 'метод и цель', optParam: '', onlyFeasible: false, trialSort: { col: 'trial', asc: true }, _optTick: 0,
+    optimizeTab: 'constructor', ob: emptyOb(), obMeta: { metrics: [], fields: [], bases: [], samplers: {} }, obResult: null, obChecking: false,
+    OBJECTIVE_PRESETS, studyEvents: {},
+    showEst: true, runEst: null, optEst: null, studyEst: null, scanEstNote: '',
     optGeo: { cell: '', stack: '' }, optGeoInfo: '',
     job: null, docHtml: '', lightbox: null, modal: null, toast: '', _jobStatus: {},
     tracksN: 20, v3dAllCells: false, v3dCellInfo: {}, v3d: null, v3dEvents: [], v3dEvent: 'all', v3dParticles: {}, v3dCounts: {},
@@ -72,11 +94,14 @@ function app() {
     // ------------------------------------------------------------ boot / routing
     async init() {
       this.theme = localStorage.getItem('srdet-theme') || 'auto';
+      try { this.showEst = localStorage.getItem('srdet-est') !== '0'; } catch (e) { this.showEst = true; }
       this.applyTheme();
       try { this.selected = JSON.parse(localStorage.getItem('srdet-selected') || '[]'); } catch (e) { this.selected = []; }
       [this.info, this.schema, this.configs] = await Promise.all([api('/api/info'), api('/api/schema'), api('/api/configs')]);
       if (this.configs.length && !this.configs.find(c => c.name === this.form.base)) this.form.base = this.configs[0].name;
-      await Promise.all([this.loadBase(), this.refresh()]);
+      await Promise.all([this.loadBase(), this.refresh(), this.loadObMeta()]);
+      const first = this.opts.specs[0];
+      if (first) this.obLoadPreset(first.name); else this.obCheck();
       window.addEventListener('hashchange', () => this.onRoute());
       this.onRoute();
       setInterval(() => this.poll(), 2000);
@@ -122,6 +147,10 @@ function app() {
         }
         this.jobs = jobs;
         if (this.route.view === 'job' && this.job) this.loadJob(this.job.id, true);
+        // a running optimisation: refresh its page every ~6 s
+        if (this.route.view === 'opt' && this.opt && !this.opt.finished && ++this._optTick % 3 === 0) this.loadOpt(this.opt.path, true);
+        if (this.route.view === 'optimize' && this.opts.results.some(r => !r.finished) && ++this._optTick % 3 === 0)
+          this.opts = await api('/api/optimizations');
         if (finished) {
           this.notify(`Задача <b>${finished.title}</b>: ${finished.status}` +
             (finished.result ? ` — <a href="${this.resultLink(finished)}">открыть</a>` : ''));
@@ -322,8 +351,70 @@ function app() {
     saveSel() { localStorage.setItem('srdet-selected', JSON.stringify(this.selected)); },
     async loadRun(path) {
       this.run = null;
+      this.runEst = null;
       try { this.run = await api('/api/run?path=' + encodeURIComponent(path)); } catch (e) { this.notify(e.message); return; }
       this.setRunTab(this.runTab);
+      api('/api/estimates?path=' + encodeURIComponent(path)).then(r => { if (this.run && this.run.path === path) this.runEst = r; }).catch(() => {});
+    },
+
+    // ------------------------------------------------------------ analytic estimates (sanity checks)
+    toggleEst(on) {
+      this.showEst = on;
+      try { localStorage.setItem('srdet-est', on ? '1' : '0'); } catch (e) { /* private mode */ }
+      if (this.route.view === 'opt' && this.optTab === 'параметр → гистограммы') this.drawScan();
+      if (this.route.view === 'study') this.drawStudy();
+    },
+    estFor(checks, metric) { return (checks || []).find(c => c.metric === metric); },
+    estBadge(s) { return { ok: 'ok', warn: 'warn', bad: 'bad' }[s] || ''; },
+    estStatusText(s) { return { ok: 'сходится', warn: 'проверить', bad: 'расходится' }[s] || s; },
+    estRange(c) {
+      const f = v => this.fmt(v);
+      if (c.low === c.high) return '≈ ' + f(c.value);
+      return c.low === 0 ? '≤ ' + f(c.high) : `${f(c.low)} … ${f(c.high)}`;
+    },
+    estTable(checks) {
+      if (!checks || !checks.length) return '<div class="empty">Для этой конфигурации подходящих оценок нет (например, спектр вместо одной энергии или оптика выключена).</div>';
+      const rows = checks.map(c => `<tr>
+        <td><b>${esc(c.title)}</b><div class="small muted">${esc(c.law)}</div>
+          <div class="small muted"><i>${esc(c.source)}</i>${c.note ? ' — ' + esc(c.note) : ''}</div></td>
+        <td class="num">${esc(this.estRange(c))}</td>
+        <td class="num">${esc(this.fmt(c.measured))}${c.err ? '<div class="small muted">± ' + esc(this.fmt(c.err)) + '</div>' : ''}</td>
+        <td class="num small">${c.deviation && Math.abs(c.deviation) >= 5e-4 ? (c.deviation > 0 ? '+' : '') + (100 * c.deviation).toFixed(1) + ' %' : '—'}</td>
+        <td><span class="badge ${this.estBadge(c.status)}">${this.estStatusText(c.status)}</span></td></tr>`).join('');
+      return `<table class="t"><thead><tr><th>проверка и закон</th><th>оценка</th><th>Geant4</th><th>откл.</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    },
+    studyEstNote() {
+      const pc = Object.values((this.studyEst && this.studyEst.per_check) || {}).filter(c => c.metric === this.studyY);
+      if (!pc.length) return 'Для этой величины аналитической оценки нет (оценки есть для: ' +
+        ([...new Set(Object.values((this.studyEst && this.studyEst.per_check) || {}).map(c => this.label(c.metric)))].join(', ') || '—') + ').';
+      return pc.map(c => `Пунктир — оценка «${c.title}» для тех же конфигураций; по точкам: ${this.estSummaryText(c)}.`).join(' ');
+    },
+    estSummaryText(s) {
+      if (!s) return '';
+      return `сходится ${s.ok || 0}` + (s.warn ? `, проверить ${s.warn}` : '') + (s.bad ? `, расходится ${s.bad}` : '');
+    },
+    // dashed approximation (and its range as a band) over simulated points; rows need run_dir
+    estTraces(rows, xKey, metric, points, name, color, group) {
+      if (!this.showEst || !points) return [];
+      const pts = rows.map(r => ({ x: r[xKey], e: (points[r.run_dir] || {})[metric] })).filter(p => p.e && p.x !== undefined && p.x !== null);
+      if (!pts.length) return [];
+      pts.sort((a, b) => (typeof a.x === 'number' && typeof b.x === 'number' ? a.x - b.x : 0));
+      const line = { color: color || cssVar('--muted'), width: 1.6, dash: 'dash' };
+      const bound = pts.every(p => p.e.low === 0 && p.e.high > 0);  // "not more than": draw the bound only
+      if (bound) name += ' (верхняя граница)';
+      const band = !bound && pts.some(p => p.e.low !== p.e.high);
+      if (band) name += ' (середина диапазона)';
+      const out = [];
+      if (band) {
+        out.push({ type: 'scatter', mode: 'lines', x: pts.map(p => p.x), y: pts.map(p => p.e.low), line: { width: 0 }, hoverinfo: 'skip',
+                   showlegend: false, legendgroup: group });
+        out.push({ type: 'scatter', mode: 'lines', x: pts.map(p => p.x), y: pts.map(p => p.e.high), fill: 'tonexty', line: { width: 0 },
+                   fillcolor: 'rgba(128,128,128,0.18)', name: name + ' — диапазон оценки', hoverinfo: 'skip', legendgroup: group });
+      }
+      out.push({ type: 'scatter', mode: 'lines+markers', x: pts.map(p => p.x), y: pts.map(p => (p.e.low === 0 ? p.e.high : p.e.value)),
+                 line, marker: { symbol: 'x', size: 7, color: line.color }, name: name, legendgroup: group,
+                 hovertemplate: '%{y:.4g} (оценка)<extra></extra>' });
+      return out;
     },
     async setRunTab(t) {
       if (t !== '3D' && this.v3d) { this.v3d.dispose(); this.v3d = null; }  // stop rendering off-screen
@@ -444,13 +535,28 @@ function app() {
     // ------------------------------------------------------------ studies
     async loadStudy(path) {
       this.study = null;
+      this.studyEst = null;
       this.study = await api('/api/study?path=' + encodeURIComponent(path));
+      api('/api/estimates?path=' + encodeURIComponent(path)).then(r => {
+        if (this.study && this.study.path === path) { this.studyEst = r; this.drawStudy(); }
+      }).catch(() => {});
       const spec = this.study.spec || {};
       const scan = spec.variants ? ['variant'] : Object.keys(spec.scan || {});
       this.studyX = spec.x || scan[0] || '';
       this.studyY = (spec.metrics || [])[0] || '';
       this.studySeries = spec.series || '';
       this.$nextTick(() => this.drawStudy());
+    },
+    studyValue(s, key, v, i) {
+      if (s.x_names && s.x_names[i] !== undefined && Object.keys(s.scan).length === 1) return s.x_names[i];
+      return typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
+    },
+    // explanation of a study result: from its own study.yaml, else (older results) from the current spec
+    studyExplain() {
+      const spec = (this.study && this.study.spec) || {};
+      if (spec.explain) return spec.explain;
+      const cur = this.studies.specs.find(s => s.name === spec.name);
+      return cur && cur.explain ? { ...cur.explain, stale: true } : {};
     },
     studyCols() {
       if (!this.study || !this.study.rows.length) return [];
@@ -469,17 +575,248 @@ function app() {
                  x: rr.map(r => r[x]), y: rr.map(r => r[y]),
                  error_y: rr[0] && rr[0][y + '_err'] !== undefined ? { type: 'data', array: rr.map(r => r[y + '_err']), visible: true } : undefined };
       });
-      Plotly.react(el, traces, this.layout({ xaxis: { title: x }, yaxis: { title: this.label(y) } }), { responsive: true });
+      const palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+      traces.forEach((t, i) => { t.marker = { color: palette[i % palette.length] }; t.line = { color: palette[i % palette.length] }; });
+      if (!cat && this.studyEst) {
+        groups.forEach((gv, i) => {
+          const rr = rows.filter(r => gv === null || r[s] === gv);
+          traces.push(...this.estTraces(rr, x, y, this.studyEst.points, 'оценка' + (gv === null ? '' : ` (${s} = ${gv})`),
+                                        palette[i % palette.length], 'g' + i));
+        });
+      }
+      const spec = this.study.spec || {};
+      const logx = !cat && spec.logx && x === (spec.x || Object.keys(spec.scan || {})[0]) && rows.every(r => r[x] > 0);
+      Plotly.react(el, traces, this.layout({ xaxis: { title: x, type: logx ? 'log' : 'linear' }, yaxis: { title: this.label(y) } }), { responsive: true });
+    },
+
+    // ------------------------------------------------------------ optimisation constructor
+    async loadObMeta() {
+      try { this.obMeta = await api('/api/optimize/meta'); } catch (e) { this.notify('meta: ' + e.message); }
+    },
+    obField(path) { return this.obMeta.fields.find(f => f.path === path) || {}; },
+    obFieldHelp(path) {
+      const f = this.obField(path);
+      if (!f.path) return path ? '' : 'без ключа: параметр участвует только в вычисляемых формулах';
+      return [f.help, f.default !== undefined && f.default !== null ? `по умолчанию ${f.default}` : ''].filter(Boolean).join(' · ');
+    },
+    obPlaceholder(path) { const f = this.obField(path); return f.default !== undefined && f.default !== null ? String(f.default) : 'значение'; },
+    obUnits(p) { const f = this.obField(p.path); return f.unit_kind ? UNITS[f.unit_kind] : (p.unit ? [p.unit] : []); },
+    obParamPath(p) {
+      const f = this.obField(p.path);
+      if (f.choices) { p.kind = 'choice'; p.values = []; }
+      else if (f.kind === 'int') { p.kind = 'int'; p.unit = ''; }
+      else if (p.kind === 'choice') p.kind = 'range';
+      if (f.kind === 'quantity') p.unit = f.unit;
+      if (f.key && /^p\d+$/.test(p.alias)) p.alias = f.key.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 12);
+    },
+    obToggle(p, c, on) { p.values = on ? [...new Set([...p.values, c])] : p.values.filter(v => v !== c); this.obCheck(); },
+    obLoadPreset(name) {
+      const s = (this.opts.specs.find(x => x.name === name) || {}).spec;
+      const ob = emptyOb();
+      ob.preset = name || '';
+      if (s) {
+        ob.name = s.name + '_custom'; ob.title = s.title || ''; ob.description = String(s.description || '').trim();
+        ob.base = typeof s.base === 'string' ? s.base : 'full.yaml';
+        ob.fixed = Object.entries(s.set || {}).map(([path, value]) => ({ path, value: typeof value === 'object' ? JSON.stringify(value) : String(value) }));
+        ob.params = Object.entries(s.space || {}).map(([alias, d]) => {
+          if (d.values) return { alias, path: d.path || '', kind: 'choice', values: d.values.map(String), low: '', high: '', unit: '', log: false, steps: 3 };
+          const [lo, u1] = splitQty(d.low), [hi, u2] = splitQty(d.high);
+          return { alias, path: d.path || '', kind: d.type === 'int' ? 'int' : 'range', low: lo, high: hi, unit: u1 || u2, log: !!d.log, steps: d.steps || 3, values: [] };
+        });
+        ob.derived = Object.entries(s.derived || {}).map(([path, d]) => (typeof d === 'object' ? { path, expr: d.expr, unit: d.unit || '' } : { path, expr: String(d), unit: '' }));
+        ob.objective = (s.objective || {}).expr || '';
+        ob.direction = String((s.objective || {}).direction || 'maximize').startsWith('min') ? 'minimize' : 'maximize';
+        ob.constraints = (s.constraints || []).map(c => {
+          const m = /^(.*?)\s*(<=|>=|==|!=|<|>)\s*(.*)$/.exec(String(c));
+          return m ? { left: m[1], op: m[2], right: m[3] } : { left: String(c), op: '', right: '' };
+        });
+        if (s.pareto) ob.pareto = { on: true, x_dir: 'min', y_dir: 'max', ...s.pareto };
+        ob.report = [...(s.report_metrics || [])];
+        const se = s.search || {};
+        ob.search = { sampler: se.sampler || 'lhs', initial: se.initial ?? 12, events: (se.events || [300]).join(', '), eta: se.eta ?? 3, seed: se.seed ?? 1,
+                      refineOn: !!se.refine, refine: { iterations: 4, events: (se.events || [300]).slice(-1)[0], step: 0.15, min_gain: 0.03, ...(se.refine || {}) },
+                      finalOn: !!(se.final && se.final.top), final: { top: 3, events: 3000, repeats: 3, ...(se.final || {}) } };
+        ob.quickSpec = s.quick || null;
+      }
+      this.ob = ob;
+      this.obCheck();
+    },
+    // constructor state -> spec dictionary (the same format as configs/optimize/*.yaml)
+    obValue(path, v) {
+      const f = this.obField(path);
+      if (f.kind === 'int' || f.kind === 'float') return v === '' || isNaN(+v) ? v : +v;
+      if (f.kind === 'bool') return v === true || v === 'true';
+      if (typeof v === 'string' && /^[\[{]/.test(v.trim())) { try { return JSON.parse(v); } catch (e) { /* keep text */ } }
+      return v;
+    },
+    obSpec() {
+      const o = this.ob, num = v => (v === '' || v === null || isNaN(+v) ? v : +v);
+      const space = {};
+      for (const p of o.params) {
+        const d = p.path ? { path: p.path } : {};
+        if (p.kind === 'choice') d.values = p.values.map(v => this.obValue(p.path, v));
+        else {
+          d.low = p.unit ? `${p.low} ${p.unit}` : num(p.low);
+          d.high = p.unit ? `${p.high} ${p.unit}` : num(p.high);
+          if (p.log) d.log = true;
+          if (p.kind === 'int') d.type = 'int';
+          if (o.search.sampler === 'grid' && p.steps) d.steps = +p.steps;
+        }
+        space[p.alias] = d;
+      }
+      const spec = { name: o.name, title: o.title || o.name, description: o.description, base: o.base,
+                     set: Object.fromEntries(o.fixed.filter(r => r.path).map(r => [r.path, this.obValue(r.path, r.value)])), space };
+      if (o.derived.length) spec.derived = Object.fromEntries(o.derived.filter(d => d.path).map(d => [d.path, d.unit ? { expr: d.expr, unit: d.unit } : { expr: d.expr }]));
+      spec.objective = { expr: o.objective, direction: o.direction };
+      spec.constraints = o.constraints.filter(c => String(c.left).trim()).map(c => (c.op ? `${c.left} ${c.op} ${c.right}` : c.left));
+      if (o.pareto.on) spec.pareto = { x: o.pareto.x, x_dir: o.pareto.x_dir, y: o.pareto.y, y_dir: o.pareto.y_dir };
+      if (o.report.length) spec.report_metrics = [...o.report];
+      const s = o.search;
+      spec.search = { sampler: s.sampler, events: String(s.events).split(/[,;\s]+/).filter(Boolean).map(Number), eta: +s.eta, seed: +s.seed };
+      if (s.sampler !== 'grid') spec.search.initial = +s.initial;
+      spec.search.refine = s.refineOn ? { iterations: +s.refine.iterations, events: +s.refine.events, step: +s.refine.step, min_gain: +s.refine.min_gain } : null;
+      spec.search.final = s.finalOn ? { top: +s.final.top, events: +s.final.events, repeats: +s.final.repeats } : null;
+      if (o.quickSpec) spec.quick = o.quickSpec;
+      return spec;
+    },
+    async obCheck() {
+      if (!this.obMeta.fields.length) return;
+      const seq = (this._obSeq = (this._obSeq || 0) + 1);
+      this.obChecking = true;
+      try {
+        const r = await post('/api/optimize/check', { spec: this.obSpec(), quick: this.ob.quick });
+        if (seq === this._obSeq) this.obResult = r;
+      } catch (e) {
+        if (seq === this._obSeq) this.obResult = { ok: false, errors: [e.message], warnings: [], plan: { steps: [], sims: 0, events: 0 }, yaml: '' };
+      } finally { if (seq === this._obSeq) this.obChecking = false; }
+    },
+    obMetric(name) { return this.obMeta.metrics.find(m => m.name === name); },
+    obMetricsIn(expr) {
+      const names = [...new Set((String(expr || '').match(/[A-Za-z_]\w*/g) || []))];
+      return names.map(n => this.obMetric(n)).filter(Boolean);
+    },
+    // human-readable formula: metric names -> labels, aliases highlighted
+    obPretty(expr, aliases = this.ob.params.map(p => p.alias)) {
+      const ops = { '**': '^', '*': ' × ', '/': ' ÷ ', '<=': ' ≤ ', '>=': ' ≥ ', '!=': ' ≠ ', '==': ' = ' };
+      // token by token, so operators inside the generated HTML are never touched
+      return String(expr).replace(/([A-Za-z_]\w*)|(\*\*|<=|>=|!=|==|[*/])|([^A-Za-z_*/<>=!]+|[<>=!])/g, (all, name, op, other) => {
+        if (op) return ops[op];
+        if (other) return esc(other);
+        const m = this.obMetric(name);
+        if (m) return `<span title="${esc(name)}">${esc(m.label)}</span>`;
+        return aliases.includes(name) ? `<i>${esc(name)}</i>` : esc(name);
+      });
+    },
+    obFormula() {
+      if (!this.ob.objective) return '<span class="muted">цель не задана</span>';
+      return (this.ob.direction === 'maximize' ? 'Максимизируем: ' : 'Минимизируем: ') + this.obPretty(this.ob.objective) +
+        (this.ob.constraints.length ? '<div class="small muted" style="font-weight:400;margin-top:4px">при условиях: ' +
+          this.ob.constraints.filter(c => c.left).map(c => esc(this.obConstraintText(c))).join('; ') + '</div>' : '');
+    },
+    obConstraintText(c) {
+      if (!c.left) return '';
+      const m = this.obMetric(String(c.left).trim());
+      return `${m ? m.label : c.left} ${OP_TEXT[c.op] || c.op} ${c.right}`;
+    },
+    obAddToObjective(name) {
+      if (!name) return;
+      this.ob.objective = this.ob.objective.trim() ? `${this.ob.objective.trim()} * ${name}` : name;
+      const m = this.obMetric(name);
+      if (m && m.better && this.ob.objective === name) this.ob.direction = m.better === 'max' ? 'maximize' : 'minimize';
+      this.obCheck();
+    },
+    obEta() {
+      if (!this.obResult || !this.obResult.plan.events) return '';
+      return 'Ориентир по времени: полный детектор с оптикой — около 1 с на 1000 событий (8 потоков) плюс ~2 с на запуск ' +
+        'каждой симуляции; точнее покажет quick (время каждого испытания видно в таблице испытаний).';
+    },
+    async obLaunch(quick) {
+      await this.obCheck();
+      if (!this.obResult || !this.obResult.ok) { this.notify('Исправьте ошибки спецификации'); return; }
+      this.submit({ kind: 'optimize', spec: this.obSpec(), quick, archive: this.ob.archive && !quick });
+    },
+    async obSave() {
+      const spec = this.obSpec();
+      try {
+        const r = await post('/api/optimize/save', { spec });
+        this.notify(`Сохранено: <code>${esc(r.path)}</code>`);
+      } catch (e) {
+        if (/существует/.test(e.message) && confirm(`${e.message}. Перезаписать?`)) {
+          try { const r = await post('/api/optimize/save', { spec, overwrite: true }); this.notify(`Перезаписано: <code>${esc(r.path)}</code>`); }
+          catch (e2) { this.notify('Ошибка: ' + esc(e2.message)); return; }
+        } else { this.notify('Ошибка: ' + esc(e.message)); return; }
+      }
+      this.opts = await api('/api/optimizations');
+      this.ob.preset = spec.name;
+    },
+    obDownload() {
+      const blob = new Blob([this.obResult ? this.obResult.yaml : ''], { type: 'text/yaml' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (this.ob.name || 'optimization') + '.yaml';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    },
+    // a finished optimisation back into the constructor (change something, run again)
+    optToConstructor() {
+      const spec = JSON.parse(JSON.stringify(this.opt.spec));
+      const tmp = '__from_run__';
+      this.opts.specs = [...this.opts.specs.filter(s => s.name !== tmp), { name: tmp, title: 'из запуска', spec }];
+      this.obLoadPreset(tmp);
+      this.ob.preset = '';
+      this.ob.name = String(spec.name || 'opt').replace(/_custom$/, '') + '_v2';
+      this.optimizeTab = 'constructor';
+      location.hash = '#/optimize';
     },
 
     // ------------------------------------------------------------ optimisation dashboard
-    async loadOpt(path) {
-      this.opt = null;
-      this.opt = await api('/api/optimization?path=' + encodeURIComponent(path));
-      this.optParam = this.optAliases()[0] || '';
-      this.scanParam = this.optAliases()[0] || '';
-      this.scanMetric = this.scanMetrics()[0] || 'objective';
+    async loadOpt(path, quiet) {
+      if (!quiet) this.opt = null;
+      let o;
+      try { o = await api('/api/optimization?path=' + encodeURIComponent(path)); } catch (e) { if (!quiet) this.notify(e.message); return; }
+      if (quiet && this.opt && this.opt.path === path && this.opt.trials.length === o.trials.length && this.opt.finished === o.finished) {
+        this.opt.progress = o.progress;
+        return;
+      }
+      this.opt = o;
+      api('/api/estimates?path=' + encodeURIComponent(path)).then(r => {
+        if (!this.opt || this.opt.path !== path) return;
+        this.optEst = r;
+        if (this.optTab === 'параметр → гистограммы') this.drawScan();
+      }).catch(() => {});
+      const al = this.optAliases();
+      if (!al.includes(this.optParam)) this.optParam = al[0] || '';
+      if (!al.includes(this.scanParam)) this.scanParam = al[0] || '';
+      if (!this.scanMetrics().includes(this.scanMetric)) this.scanMetric = this.scanMetrics()[0] || 'objective';
       this.setOptTab(this.optTab);
+    },
+    optFormula() {
+      const o = this.opt.spec.objective || {}, al = this.optAliases();
+      if (!o.expr) return '';
+      const cons = (this.opt.spec.constraints || []).map(c => {
+        const m = /^(.*?)\s*(<=|>=|==|!=|<|>)\s*(.*)$/.exec(String(c));
+        return esc(m ? this.obConstraintText({ left: m[1], op: m[2], right: m[3] }) : c);
+      });
+      return (String(o.direction || 'max').startsWith('min') ? 'Минимизировали: ' : 'Максимизировали: ') + this.obPretty(o.expr, al) +
+        (cons.length ? '<div class="small muted" style="font-weight:400;margin-top:4px">при условиях: ' + cons.join('; ') + '</div>' : '');
+    },
+    optMetricsUsed() {
+      const s = this.opt.spec;
+      return this.obMetricsIn([(s.objective || {}).expr, ...(s.constraints || [])].join(' '));
+    },
+    optRealSims() { return this.opt.trials.filter(t => t.run_dir).length; },
+    optStageDone(step) {
+      const T = this.opt.trials, st = t => String(t.stage);
+      const match = { screen: t => st(t) === step.id, halving: t => st(t) === step.id, refine: t => /^r\d+$/.test(st(t)),
+                      final: t => st(t).startsWith('final') }[step.kind];
+      if (!match || !step.sims) return '';
+      const rows = T.filter(match), ok = rows.filter(t => t.feasible).length;
+      return `план: ${this.fmt(step.sims)} × ${this.fmt(step.events)} соб. · выполнено ${rows.length}, допустимых ${ok}`;
+    },
+    optProgress() {
+      const p = (this.opt && this.opt.progress) || {};
+      if (!p.planned) return 0;
+      return Math.min(100, Math.round(100 * p.done / p.planned));
     },
     optAliases() { return this.opt ? Object.keys(this.opt.spec.space || {}) : []; },
     optBest() {
@@ -501,7 +838,13 @@ function app() {
     sortedTrials() {
       const { col, asc } = this.trialSort;
       const rows = this.opt.trials.filter(t => !this.onlyFeasible || t.feasible);
-      return [...rows].sort((a, b) => ((a[col] ?? -Infinity) > (b[col] ?? -Infinity) ? 1 : -1) * (asc ? 1 : -1));
+      const cmp = (x, y) => (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ru', { numeric: true }));
+      // empty values always last, whatever the direction
+      return [...rows].sort((a, b) => {
+        const x = a[col], y = b[col], ex = x === null || x === undefined || x === '', ey = y === null || y === undefined || y === '';
+        if (ex || ey) return ex - ey;
+        return cmp(x, y) * (asc ? 1 : -1);
+      });
     },
     async setOptTab(t) {
       this.optTab = t;
@@ -583,9 +926,14 @@ function app() {
       // metric of the same runs
       const m = this.scanMetric;
       const cat = rows.some(t => typeof t[p] === 'string');
+      const est = cat || !this.optEst ? [] : this.estTraces(rows, p, m, this.optEst.points, 'оценка', '#8a8f99', 'est');
+      const dEst = (this.opt.spec.space || {})[p] || {};
       Plotly.react(this.$refs.scanmetric, [{ type: cat ? 'bar' : 'scatter', mode: 'lines+markers', x: rows.map(t => t[p]), y: rows.map(t => t[m]),
-        marker: { color: rows.map(t => (t.feasible ? '#19a979' : '#d64545')), size: 10 }, hovertext: rows.map(t => this.hoverText(t)), hoverinfo: 'text+y' }],
-        this.layout({ xaxis: { title: p }, yaxis: { title: this.label(m) } }), { responsive: true });
+        marker: { color: rows.map(t => (t.feasible ? '#19a979' : '#d64545')), size: 10 }, hovertext: rows.map(t => this.hoverText(t)), hoverinfo: 'text+y',
+        name: 'Geant4', line: { color: '#2a6fdb' } }, ...est],
+        this.layout({ xaxis: { title: p, type: dEst.log && !cat ? 'log' : 'linear' }, yaxis: { title: this.label(m) }, showlegend: est.length > 0 }), { responsive: true });
+      this.scanEstNote = !this.showEst ? '' : est.length ? 'Пунктир — аналитическая оценка для тех же конфигураций (NIST XCOM / простые законы), серая полоса — её диапазон.'
+        : 'Для этой метрики аналитической оценки нет.';
       const vals = rows.map(t => t[m]).filter(isFinite);
       this.scanSummary = vals.length ? `${this.label(m)}: от ${this.fmt(Math.min(...vals))} до ${this.fmt(Math.max(...vals))}; зелёные точки удовлетворяют ограничениям, красные — нет.` : '';
     },

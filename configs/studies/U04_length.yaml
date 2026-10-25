@@ -1,12 +1,27 @@
 name: U04_length
-title: "U4a - light collection vs channel length L"
+title: "U4a - light collection vs channel length L (0.2 - 100 mm)"
 description: >
   Aspect ratio L/D at fixed D = 200 um. Longer channels absorb more X-rays but need more
   reflections: N ~ L / (D tan(theta)).
+explain:
+  question: "Как светосбор падает с длиной канала и с какой длины покрытие начинает решать всё?"
+  why: >
+    Оптическая пушка в одном канале (D = 200 мкм, идеальный сенсор): фотоны рождаются равномерно по
+    всей длине, поэтому видна чистая потеря света на отражениях. Длины идут в log-шкале от 0.2 мм
+    (L/D = 1, свет почти не отражается) до 100 мм (L/D = 500, сотни отражений): так видны оба предела
+    и переход между ними. Три покрытия — сильно поглощающий Al, лучший металл Ag и диффузно-зеркальный
+    ESR — показывают, что для коротких каналов покрытие почти неважно, а для длинных — главное.
+    Сколько рентгена поглощается при каждой длине, показывает U04c.
+  expect: >
+    LCE падает примерно как R^N(L): у Al в разы быстрее, чем у Ag. Короткие каналы (L ≲ 2 мм) дают
+    близкий свет при любом покрытии.
+  read: >
+    Логарифмическая ось x: наклон кривой — потеря на отражениях. mean_refl_det растёт ∝ L для
+    зеркал; у ESR он насыщается, потому что дальние фотоны просто не доходят.
 base: unit_optical.yaml
 scan:
   optics.coating: [Al, Ag, ESR_LUT]
-  geometry.length: [1 mm, 2 mm, 5 mm, 10 mm, 20 mm, 30 mm]
+  geometry.length: [0.2 mm, 0.5 mm, 1 mm, 2 mm, 3 mm, 5 mm, 10 mm, 20 mm, 30 mm, 50 mm, 100 mm]
 x: geometry.length
 series: optics.coating
 logx: true

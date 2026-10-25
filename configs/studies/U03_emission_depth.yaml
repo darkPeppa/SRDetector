@@ -3,6 +3,17 @@ title: "U3 - light collection vs emission depth z (depth-of-interaction effect)"
 description: >
   Photons emitted at a fixed depth z (sensor at +z). The LCE(z) slope sets the depth-dependent
   light non-uniformity, which broadens the energy resolution of thick channels.
+explain:
+  question: "Зависит ли сигнал от того, на какой глубине канала поглотился рентген?"
+  why: >
+    Фотоны рождаются в тонком слое на фиксированной глубине z (канал 30 мм, сенсор у +15 мм).
+    Точки от -14.5 до +14.5 мм покрывают весь канал. Если LCE(z) сильно меняется, одинаковая энергия
+    даёт разный сигнал в зависимости от глубины — энергетическое разрешение ухудшается.
+    Сравниваются три покрытия и голый канал.
+  expect: >
+    У металлов светосбор у дальнего торца в разы меньше, чем у ближнего; у голого канала (ПВО)
+    зависимость почти плоская.
+  read: "Чем площе кривая, тем однороднее отклик; наклон показывает, во сколько раз хуже дальний конец."
 base: unit_optical.yaml
 set: {beam.optical.z_uniform: false}
 scan:

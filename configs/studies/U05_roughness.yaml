@@ -3,6 +3,14 @@ title: "U5 - light collection vs micro-facet roughness sigma_alpha"
 description: >
   Ground metal surfaces (unified model, pure lobe reflection). Roughness randomises the
   reflection angle: photons leave TIR-like trajectories and need more bounces.
+explain:
+  question: "Насколько вредна шероховатость металлического покрытия?"
+  why: >
+    Модель микрограней (unified): угол наклона граней разбросан с σα. Значения 0…25° идут от
+    полированной поверхности до грубо обработанной. Al (отражение зависит от угла) сравнивается с
+    зеркалом с постоянным R, чтобы отделить эффект геометрии от зависимости R от угла падения.
+  expect: "Al теряет свет уже при σα ≈ 1°, у зеркала с постоянным R зависимость слабая."
+  read: "Если у Al кривая падает круто, а у mirror нет — потери связаны с ухудшением скользящего отражения."
 base: unit_optical.yaml
 scan:
   optics.coating: [Al, mirror]

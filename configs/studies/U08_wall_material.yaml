@@ -3,6 +3,14 @@ title: "U8 - honeycomb wall material"
 description: >
   Lead glass stops cross-talk X-rays but absorbs part of the beam; low-Z glass does the opposite.
   60 keV uniform beam on the central cell of a 7-cell cluster, bare and Al-coated channels.
+explain:
+  question: "Из какого стекла делать стенки сот?"
+  why: >
+    Свинцовое стекло (MCP, NIST) поглощает K-флуоресценцию I/Cs и вторичные электроны рядом с каналом,
+    боросиликат и кварц почти прозрачны для них, но меньше поглощают сам пучок. Шаг 220 мкм — компромисс
+    из U07. Голые и покрытые каналы — потому что для голых важен ещё показатель преломления стекла.
+  expect: "Свинцовое стекло — меньше ЭМ-кросс-тока; для голых каналов лучше стекло с низким n."
+  read: "Сравнивайте em_crosstalk и mean_edep_wall_keV (сколько энергии съело стекло)."
 base: cluster7_xray.yaml
 set: {geometry.pitch: 220 um}
 scan:

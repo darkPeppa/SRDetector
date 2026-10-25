@@ -55,6 +55,9 @@ pre { background: var(--code); border: 1px solid var(--border); border-radius: 8
 .small { font-size: 12px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .right { margin-left: auto; }
+.jobrow { padding: 6px 0; border-bottom: 1px dashed var(--border); flex-wrap: nowrap; }
+.jobrow > a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobrow > .right { white-space: nowrap; }
 
 .btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit; display: inline-flex; gap: 6px; align-items: center; }
 .btn:hover { background: var(--panel-2); }
@@ -134,9 +137,47 @@ table.t td.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   .layout { grid-template-columns: 1fr; }
   .side { position: static; height: auto; }
+  .nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .nav a { margin: 0; padding: 6px 10px; background: var(--panel-2); }
   .split, .g2, .g3, .g4 { grid-template-columns: 1fr; }
   label.f { grid-template-columns: 1fr; }
   .main { padding: 16px; }
+}
+
+/* optimisation constructor */
+.infobox { border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+.warnbox.soft { border-color: color-mix(in srgb, var(--warn) 50%, transparent); background: color-mix(in srgb, var(--warn) 9%, transparent); color: var(--text); }
+.ob-row { display: grid; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.ob-row:last-child { border-bottom: 0; }
+.ob-param { grid-template-columns: 90px minmax(160px, 1.4fr) 110px minmax(240px, 2fr) 30px; }
+.ob-fixed { grid-template-columns: minmax(180px, 1fr) minmax(140px, 1fr) 30px; }
+.ob-derived { grid-template-columns: minmax(160px, 1fr) minmax(200px, 2fr) 70px 30px; }
+.ob-cons { grid-template-columns: minmax(200px, 2fr) 70px 110px minmax(120px, 1.4fr) 30px; }
+.ob-range { display: grid; grid-template-columns: 1fr 1fr 70px auto; gap: 6px; align-items: center; }
+.ob-x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0; }
+.ob-x:hover { color: var(--bad); }
+.ob-head { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
+.ob-choices { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.ob-choices label { display: inline-flex; gap: 4px; align-items: center; }
+.ob-steps { margin: 0; padding-left: 20px; }
+.ob-steps li { margin-bottom: 8px; font-size: 12.5px; }
+.ob-steps .n { color: var(--muted); font-size: 11.5px; display: block; }
+.ob-formula { font-size: 14px; font-weight: 600; padding: 8px 10px; background: var(--panel-2); border-radius: 8px; margin: 6px 0; }
+.ob-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+.ob-grid2 > label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.progress { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.progress > i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+.ob-plan { max-height: calc(100vh - 32px); overflow: auto; }
+.study-q { font-weight: 600; font-size: 14px; margin: 4px 0 6px; }
+.ob-param > :nth-child(1) { grid-area: a; } .ob-param > :nth-child(2) { grid-area: p; } .ob-param > :nth-child(3) { grid-area: k; }
+.ob-param > :nth-child(4) { grid-area: v; } .ob-param > :nth-child(5) { grid-area: x; }
+.ob-param { grid-template-areas: "a p k v x"; }
+@media (max-width: 1400px) {
+  .ob-param { grid-template-columns: 110px 1fr 1fr 30px; grid-template-areas: "a p p x" "k v v v"; }
+  .ob-param.ob-head { display: none; }
+  .ob-cons { grid-template-columns: 1fr 70px 1fr 30px; }
+  .ob-cons > span { grid-column: 1 / -1; order: 5; }
+  .ob-derived { grid-template-columns: 1fr 1.6fr 70px 30px; }
 }
 
 /* guided tour */

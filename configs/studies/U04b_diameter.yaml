@@ -2,6 +2,14 @@ name: U04b_diameter
 title: "U4b - light collection vs channel diameter D (wall 8 um kept constant)"
 description: >
   D and pitch are scanned together (zip) so that the wall thickness stays at 8 um - 2 x 2 um coating.
+explain:
+  question: "Как светосбор зависит от диаметра канала при постоянной толщине стенки?"
+  why: >
+    Число отражений растёт как L/D, поэтому узкие каналы теряют больше света. Диаметр и шаг сканируются
+    вместе (mode: zip), чтобы стенка оставалась 8 мкм — иначе менялись бы сразу две вещи. Диапазон
+    25–400 мкм в log-шкале: от предельно тонких каналов (лучшее разрешение) до крупных (больше света).
+  expect: "LCE растёт примерно пропорционально D; доля площади сцинтиллятора тоже растёт."
+  read: "Сравнивайте lce с geometry_fill_factor: крупнее канал — больше света, но хуже пространственное разрешение."
 base: unit_optical.yaml
 mode: zip
 scan:

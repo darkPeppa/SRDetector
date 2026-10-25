@@ -3,6 +3,14 @@ title: "U6a - optical coupling between channels and sensor"
 description: >
   Air gap vs silicone grease vs epoxy (n = 1.0 / 1.465 / 1.55). With an air gap most photons
   are trapped by total internal reflection at the exit face of CsI (n = 1.79).
+explain:
+  question: "Чем склеивать каналы с сенсором — и нужна ли склейка вообще?"
+  why: >
+    Три типичных варианта: воздушный зазор (n = 1.0), силиконовая смазка (1.465), эпоксид (1.55).
+    У CsI n = 1.79, поэтому на выходе из канала часть света запирается полным внутренним отражением;
+    чем выше n прослойки, тем шире конус выхода.
+  expect: "Смазка и эпоксид дают заметно больше света, чем воздух."
+  read: "lce_exit — свет, вышедший из канала, lce — дошедший до сенсора; разница — потери в прослойке."
 base: unit_optical.yaml
 scan:
   geometry.coupling_material: [Air, OpticalGrease, Epoxy]

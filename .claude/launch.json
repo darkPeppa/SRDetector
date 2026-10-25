@@ -4,8 +4,22 @@
     {
       "name": "srdet-web",
       "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "up", "web"],
+      "runtimeArgs": [
+        "compose",
+        "up",
+        "web"
+      ],
       "port": 8080
+    },
+    {
+      "name": "srdet-web-pink",
+      "url": "http://localhost:8081",
+      "port": 8081
+    },
+    {
+      "name": "srdet-web-rap",
+      "url": "http://localhost:8082",
+      "port": 8082
     }
   ]
 }
