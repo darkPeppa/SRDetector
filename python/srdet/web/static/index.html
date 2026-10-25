@@ -225,8 +225,19 @@
       <div class="warnbox" x-show="run.sanity && run.sanity.length" style="margin-bottom:10px">Sanity: <span x-text="(run.sanity||[]).join('; ')"></span></div>
       <div class="grid g4">
         <template x-for="k in info.key_metrics.filter(k => run.metrics_all[k] !== undefined && run.metrics_all[k] !== null)">
-          <div class="card kpi"><span class="v" x-text="fmt(run.metrics_all[k])"></span><span class="l" x-text="label(k)"></span></div>
+          <div class="card kpi"><span class="v" x-text="fmt(run.metrics_all[k])"></span><span class="l" x-text="label(k)"></span>
+            <template x-if="showEst && runEst && estFor(runEst.checks, k)">
+              <span class="small"><span class="muted" x-text="'оценка ' + estRange(estFor(runEst.checks, k))"></span>
+                <span :class="'badge ' + estBadge(estFor(runEst.checks, k).status)" x-text="estStatusText(estFor(runEst.checks, k).status)"></span></span>
+            </template></div>
         </template>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2>Проверка по оценкам <span class="small muted" style="font-weight:400" x-show="runEst && showEst" x-text="runEst ? estSummaryText(runEst.summary) : ''"></span>
+          <label class="row small right" style="font-weight:400"><input type="checkbox" :checked="showEst" @change="toggleEst($event.target.checked)"> показывать оценки</label></h2>
+        <div class="sub">Что предсказывают справочные данные (NIST XCOM) и простые законы для этой же конфигурации. «Проверить» —
+          расхождение больше допуска; «расходится» — больше двух допусков: стоит разобраться, это модель, статистика или ошибка.</div>
+        <div x-show="showEst" x-html="runEst ? estTable(runEst.checks) : '<div class=&quot;empty&quot;>считаю…</div>'"></div>
       </div>
       <div class="card" style="margin-top:14px"><h2>Все метрики</h2>
         <div class="scroll"><table class="t"><tbody>
@@ -398,7 +409,9 @@
     <div class="card" x-show="study.rows.length"><h2>Интерактивный график</h2>
       <div class="row"><span class="small muted">x:</span><select style="width:220px" x-model="studyX" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="c" :selected="c === studyX"></option></template></select>
         <span class="small muted">y:</span><select style="width:260px" x-model="studyY" @change="drawStudy()"><template x-for="c in studyCols()"><option :value="c" x-text="label(c) + ' (' + c + ')'" :selected="c === studyY"></option></template></select>
-        <span class="small muted">серии:</span><select style="width:200px" x-model="studySeries" @change="drawStudy()"><option value="">—</option><template x-for="c in studyCols()"><option :value="c" x-text="c" :selected="c === studySeries"></option></template></select></div>
+        <span class="small muted">серии:</span><select style="width:200px" x-model="studySeries" @change="drawStudy()"><option value="">—</option><template x-for="c in studyCols()"><option :value="c" x-text="c" :selected="c === studySeries"></option></template></select>
+        <label class="row small" title="аналитическая оценка по NIST XCOM и простым законам для тех же конфигураций"><input type="checkbox" :checked="showEst" @change="toggleEst($event.target.checked)"> аппроксимация (оценка)</label></div>
+      <div class="small muted" x-show="showEst && studyEst" x-text="studyEstNote()"></div>
       <div class="plot" x-ref="studyplot"></div></div>
     <div class="card md" style="margin-top:14px" x-html="renderMd(study.report, study.path + '/report.md')"></div>
   </div>
@@ -684,6 +697,21 @@
           сначала грубо сравниваются, а точно считаются только лучшие (successive halving). Уточнение двигает лучшую точку
           по одному параметру за раз, а повторы с новыми seed показывают разброс (± σ), чтобы победитель не оказался случайным.</div>
       </div>
+      <div class="card" style="grid-column: 1 / -1">
+        <h2>Проверка по оценкам
+          <label class="row small right" style="font-weight:400"><input type="checkbox" :checked="showEst" @change="toggleEst($event.target.checked)"> показывать оценки</label></h2>
+        <div class="sub">Сходятся ли результаты с NIST XCOM и простыми законами — для лучшей проверенной конфигурации
+          (<a x-show="optEst && optEst.best_run" :href="'#/run?path=' + opt.path + '/' + (optEst ? optEst.best_run : '')">её прогон</a>) и по всем испытаниям.</div>
+        <div x-show="showEst">
+          <div class="row small" style="margin-bottom:8px" x-show="optEst && optEst.per_check && Object.keys(optEst.per_check).length">
+            <span class="muted">по всем испытаниям:</span>
+            <template x-for="[id, s] in Object.entries((optEst && optEst.per_check) || {})">
+              <span class="chip" x-text="s.title + ': ' + estSummaryText(s)"
+                    :style="s.bad ? 'border-color:var(--bad)' : s.warn ? 'border-color:var(--warn)' : ''"></span></template>
+          </div>
+          <div x-html="optEst ? (optEst.checks ? estTable(optEst.checks) : '<div class=&quot;empty&quot;>Нет проверенного прогона лучшей конфигурации</div>') : '<div class=&quot;empty&quot;>считаю…</div>'"></div>
+        </div>
+      </div>
     </div>
     <div x-show="optTab === 'параметр → гистограммы'">
       <div class="card" style="margin-bottom:14px">
@@ -701,6 +729,7 @@
           <label class="row small"><input type="checkbox" x-model="scanNorm" @change="drawScan()"> нормировать (форма)</label>
           <label class="row small"><input type="checkbox" x-model="scanLog" @change="drawScan()"> лог. шкала</label>
           <label class="row small"><input type="checkbox" x-model="scanNoZero" @change="drawScan()"> без нулевого бина</label>
+          <label class="row small" title="аналитическая оценка по NIST XCOM и простым законам"><input type="checkbox" :checked="showEst" @change="toggleEst($event.target.checked)"> аппроксимация (оценка)</label>
         </div>
         <div class="warnbox" style="margin-top:8px" x-show="scanNote" x-text="scanNote"></div>
         <div class="row" style="margin-top:10px">
@@ -714,7 +743,7 @@
       <div class="split">
         <div class="card"><h2 x-text="HIST_LABELS[scanHist]"></h2><div class="plot" x-ref="scanhist" style="min-height:440px"></div></div>
         <div class="card"><h2 x-text="label(scanMetric) + ' от ' + scanParam"></h2><div class="plot" x-ref="scanmetric" style="min-height:440px"></div>
-          <div class="small muted" x-text="scanSummary"></div></div>
+          <div class="small muted" x-text="scanSummary"></div><div class="small muted" x-text="scanEstNote"></div></div>
       </div>
     </div>
     <div x-show="optTab === 'дашборд'">

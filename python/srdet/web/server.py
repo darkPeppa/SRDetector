@@ -471,6 +471,50 @@ def create_app(jobs: JobManager | None = None, skin: str | None = None) -> FastA
                        "best_path": _rel(d / "best.yaml") if (d / "best.yaml").exists() else None,
                        "plots": _plots(d)})
 
+    # ---------------- analytic cross-checks (NIST XCOM, simple laws)
+    @app.get("/api/estimates")
+    def estimates(path: str = Query(...)):
+        """Run folder: list of checks. Study / optimisation folder: expected values per simulated
+        point (for the approximation overlay) and how many points each check passes; for an
+        optimisation also the checks of the best validated run."""
+        from .. import estimates as E
+        d = _safe(path)
+        if (d / "metrics.json").exists() and (d / "config.yaml").exists():
+            checks = E.checks_for_dir(d)
+            return _clean({"kind": "run", "checks": checks, "summary": E.summary(checks)})
+        table = d / "trials.csv" if (d / "trials.csv").exists() else d / "results.csv"
+        if not table.exists():
+            return {"kind": "none", "points": {}}
+        rows = pd.read_csv(table).to_dict("records")
+        points = E.point_estimates(d, rows)
+        per_check: dict[str, dict] = {}
+        for est in points.values():
+            for metric, e in est.items():
+                s = per_check.setdefault(e["id"], {"metric": metric, "title": e["title"], "ok": 0, "warn": 0, "bad": 0})
+                s[e["status"]] = s.get(e["status"], 0) + 1
+        out = {"kind": "optimization" if table.name == "trials.csv" else "study", "points": points,
+               "per_check": per_check}
+        if table.name == "trials.csv":
+            spec = yaml.safe_load((d / "spec.yaml").read_text()) if (d / "spec.yaml").exists() else {}
+            aliases = list((spec.get("space") or {}).keys())
+            fin = pd.read_csv(d / "final.csv").to_dict("records") if (d / "final.csv").exists() else []
+
+            def same(a, b):
+                try:
+                    return math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-12)
+                except (TypeError, ValueError):
+                    return str(a) == str(b)
+            best = next((r for r in rows if fin and str(r.get("stage", "")).startswith("final")
+                         and isinstance(r.get("run_dir"), str) and all(same(r.get(a), fin[0].get(a)) for a in aliases)),
+                        None)
+            if best is None:
+                feas = [r for r in rows if r.get("feasible") and isinstance(r.get("run_dir"), str)]
+                best = max(feas, key=lambda r: r.get("events", 0)) if feas else None
+            if best is not None:
+                checks = E.checks_for_dir(d / best["run_dir"])
+                out.update({"best_run": best["run_dir"], "checks": checks, "summary": E.summary(checks)})
+        return _clean(out)
+
     # ---------------- results archive + docs
     @app.get("/api/export")
     def export_dir(path: str = Query(...), fmt: str = "xlsx"):

@@ -238,3 +238,12 @@ def test_skins():
     with pytest.raises(ValueError):
         create_app(DummyJobs(), skin="neon")
     assert "themes" not in TestClient(create_app(DummyJobs())).get("/").text
+
+
+def test_estimates_api(client, fake_run):
+    r = client.get("/api/estimates", params={"path": fake_run}).json()
+    assert r["kind"] == "run" and isinstance(r["checks"], list)
+    ids = {c["id"] for c in r["checks"]}
+    assert "beer_lambert" in ids  # unit mode, 60 keV pencil beam in CsI(Tl), L = 2 mm
+    c = next(c for c in r["checks"] if c["id"] == "beer_lambert")
+    assert c["metric"] == "detection_efficiency" and c["low"] <= c["high"] and c["law"] and c["source"]

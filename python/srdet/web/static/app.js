@@ -85,6 +85,7 @@ function app() {
     opt: null, optTab: 'метод и цель', optParam: '', onlyFeasible: false, trialSort: { col: 'trial', asc: true }, _optTick: 0,
     optimizeTab: 'constructor', ob: emptyOb(), obMeta: { metrics: [], fields: [], bases: [], samplers: {} }, obResult: null, obChecking: false,
     OBJECTIVE_PRESETS, studyEvents: {},
+    showEst: true, runEst: null, optEst: null, studyEst: null, scanEstNote: '',
     optGeo: { cell: '', stack: '' }, optGeoInfo: '',
     job: null, docHtml: '', lightbox: null, modal: null, toast: '', _jobStatus: {},
     tracksN: 20, v3dAllCells: false, v3dCellInfo: {}, v3d: null, v3dEvents: [], v3dEvent: 'all', v3dParticles: {}, v3dCounts: {},
@@ -93,6 +94,7 @@ function app() {
     // ------------------------------------------------------------ boot / routing
     async init() {
       this.theme = localStorage.getItem('srdet-theme') || 'auto';
+      try { this.showEst = localStorage.getItem('srdet-est') !== '0'; } catch (e) { this.showEst = true; }
       this.applyTheme();
       try { this.selected = JSON.parse(localStorage.getItem('srdet-selected') || '[]'); } catch (e) { this.selected = []; }
       [this.info, this.schema, this.configs] = await Promise.all([api('/api/info'), api('/api/schema'), api('/api/configs')]);
@@ -349,8 +351,70 @@ function app() {
     saveSel() { localStorage.setItem('srdet-selected', JSON.stringify(this.selected)); },
     async loadRun(path) {
       this.run = null;
+      this.runEst = null;
       try { this.run = await api('/api/run?path=' + encodeURIComponent(path)); } catch (e) { this.notify(e.message); return; }
       this.setRunTab(this.runTab);
+      api('/api/estimates?path=' + encodeURIComponent(path)).then(r => { if (this.run && this.run.path === path) this.runEst = r; }).catch(() => {});
+    },
+
+    // ------------------------------------------------------------ analytic estimates (sanity checks)
+    toggleEst(on) {
+      this.showEst = on;
+      try { localStorage.setItem('srdet-est', on ? '1' : '0'); } catch (e) { /* private mode */ }
+      if (this.route.view === 'opt' && this.optTab === 'параметр → гистограммы') this.drawScan();
+      if (this.route.view === 'study') this.drawStudy();
+    },
+    estFor(checks, metric) { return (checks || []).find(c => c.metric === metric); },
+    estBadge(s) { return { ok: 'ok', warn: 'warn', bad: 'bad' }[s] || ''; },
+    estStatusText(s) { return { ok: 'сходится', warn: 'проверить', bad: 'расходится' }[s] || s; },
+    estRange(c) {
+      const f = v => this.fmt(v);
+      if (c.low === c.high) return '≈ ' + f(c.value);
+      return c.low === 0 ? '≤ ' + f(c.high) : `${f(c.low)} … ${f(c.high)}`;
+    },
+    estTable(checks) {
+      if (!checks || !checks.length) return '<div class="empty">Для этой конфигурации подходящих оценок нет (например, спектр вместо одной энергии или оптика выключена).</div>';
+      const rows = checks.map(c => `<tr>
+        <td><b>${esc(c.title)}</b><div class="small muted">${esc(c.law)}</div>
+          <div class="small muted"><i>${esc(c.source)}</i>${c.note ? ' — ' + esc(c.note) : ''}</div></td>
+        <td class="num">${esc(this.estRange(c))}</td>
+        <td class="num">${esc(this.fmt(c.measured))}${c.err ? '<div class="small muted">± ' + esc(this.fmt(c.err)) + '</div>' : ''}</td>
+        <td class="num small">${c.deviation && Math.abs(c.deviation) >= 5e-4 ? (c.deviation > 0 ? '+' : '') + (100 * c.deviation).toFixed(1) + ' %' : '—'}</td>
+        <td><span class="badge ${this.estBadge(c.status)}">${this.estStatusText(c.status)}</span></td></tr>`).join('');
+      return `<table class="t"><thead><tr><th>проверка и закон</th><th>оценка</th><th>Geant4</th><th>откл.</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    },
+    studyEstNote() {
+      const pc = Object.values((this.studyEst && this.studyEst.per_check) || {}).filter(c => c.metric === this.studyY);
+      if (!pc.length) return 'Для этой величины аналитической оценки нет (оценки есть для: ' +
+        ([...new Set(Object.values((this.studyEst && this.studyEst.per_check) || {}).map(c => this.label(c.metric)))].join(', ') || '—') + ').';
+      return pc.map(c => `Пунктир — оценка «${c.title}» для тех же конфигураций; по точкам: ${this.estSummaryText(c)}.`).join(' ');
+    },
+    estSummaryText(s) {
+      if (!s) return '';
+      return `сходится ${s.ok || 0}` + (s.warn ? `, проверить ${s.warn}` : '') + (s.bad ? `, расходится ${s.bad}` : '');
+    },
+    // dashed approximation (and its range as a band) over simulated points; rows need run_dir
+    estTraces(rows, xKey, metric, points, name, color, group) {
+      if (!this.showEst || !points) return [];
+      const pts = rows.map(r => ({ x: r[xKey], e: (points[r.run_dir] || {})[metric] })).filter(p => p.e && p.x !== undefined && p.x !== null);
+      if (!pts.length) return [];
+      pts.sort((a, b) => (typeof a.x === 'number' && typeof b.x === 'number' ? a.x - b.x : 0));
+      const line = { color: color || cssVar('--muted'), width: 1.6, dash: 'dash' };
+      const bound = pts.every(p => p.e.low === 0 && p.e.high > 0);  // "not more than": draw the bound only
+      if (bound) name += ' (верхняя граница)';
+      const band = !bound && pts.some(p => p.e.low !== p.e.high);
+      if (band) name += ' (середина диапазона)';
+      const out = [];
+      if (band) {
+        out.push({ type: 'scatter', mode: 'lines', x: pts.map(p => p.x), y: pts.map(p => p.e.low), line: { width: 0 }, hoverinfo: 'skip',
+                   showlegend: false, legendgroup: group });
+        out.push({ type: 'scatter', mode: 'lines', x: pts.map(p => p.x), y: pts.map(p => p.e.high), fill: 'tonexty', line: { width: 0 },
+                   fillcolor: 'rgba(128,128,128,0.18)', name: name + ' — диапазон оценки', hoverinfo: 'skip', legendgroup: group });
+      }
+      out.push({ type: 'scatter', mode: 'lines+markers', x: pts.map(p => p.x), y: pts.map(p => (p.e.low === 0 ? p.e.high : p.e.value)),
+                 line, marker: { symbol: 'x', size: 7, color: line.color }, name: name, legendgroup: group,
+                 hovertemplate: '%{y:.4g} (оценка)<extra></extra>' });
+      return out;
     },
     async setRunTab(t) {
       if (t !== '3D' && this.v3d) { this.v3d.dispose(); this.v3d = null; }  // stop rendering off-screen
@@ -471,7 +535,11 @@ function app() {
     // ------------------------------------------------------------ studies
     async loadStudy(path) {
       this.study = null;
+      this.studyEst = null;
       this.study = await api('/api/study?path=' + encodeURIComponent(path));
+      api('/api/estimates?path=' + encodeURIComponent(path)).then(r => {
+        if (this.study && this.study.path === path) { this.studyEst = r; this.drawStudy(); }
+      }).catch(() => {});
       const spec = this.study.spec || {};
       const scan = spec.variants ? ['variant'] : Object.keys(spec.scan || {});
       this.studyX = spec.x || scan[0] || '';
@@ -507,6 +575,15 @@ function app() {
                  x: rr.map(r => r[x]), y: rr.map(r => r[y]),
                  error_y: rr[0] && rr[0][y + '_err'] !== undefined ? { type: 'data', array: rr.map(r => r[y + '_err']), visible: true } : undefined };
       });
+      const palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+      traces.forEach((t, i) => { t.marker = { color: palette[i % palette.length] }; t.line = { color: palette[i % palette.length] }; });
+      if (!cat && this.studyEst) {
+        groups.forEach((gv, i) => {
+          const rr = rows.filter(r => gv === null || r[s] === gv);
+          traces.push(...this.estTraces(rr, x, y, this.studyEst.points, 'оценка' + (gv === null ? '' : ` (${s} = ${gv})`),
+                                        palette[i % palette.length], 'g' + i));
+        });
+      }
       const spec = this.study.spec || {};
       const logx = !cat && spec.logx && x === (spec.x || Object.keys(spec.scan || {})[0]) && rows.every(r => r[x] > 0);
       Plotly.react(el, traces, this.layout({ xaxis: { title: x, type: logx ? 'log' : 'linear' }, yaxis: { title: this.label(y) } }), { responsive: true });
@@ -702,6 +779,11 @@ function app() {
         return;
       }
       this.opt = o;
+      api('/api/estimates?path=' + encodeURIComponent(path)).then(r => {
+        if (!this.opt || this.opt.path !== path) return;
+        this.optEst = r;
+        if (this.optTab === 'параметр → гистограммы') this.drawScan();
+      }).catch(() => {});
       const al = this.optAliases();
       if (!al.includes(this.optParam)) this.optParam = al[0] || '';
       if (!al.includes(this.scanParam)) this.scanParam = al[0] || '';
@@ -844,9 +926,14 @@ function app() {
       // metric of the same runs
       const m = this.scanMetric;
       const cat = rows.some(t => typeof t[p] === 'string');
+      const est = cat || !this.optEst ? [] : this.estTraces(rows, p, m, this.optEst.points, 'оценка', '#8a8f99', 'est');
+      const dEst = (this.opt.spec.space || {})[p] || {};
       Plotly.react(this.$refs.scanmetric, [{ type: cat ? 'bar' : 'scatter', mode: 'lines+markers', x: rows.map(t => t[p]), y: rows.map(t => t[m]),
-        marker: { color: rows.map(t => (t.feasible ? '#19a979' : '#d64545')), size: 10 }, hovertext: rows.map(t => this.hoverText(t)), hoverinfo: 'text+y' }],
-        this.layout({ xaxis: { title: p }, yaxis: { title: this.label(m) } }), { responsive: true });
+        marker: { color: rows.map(t => (t.feasible ? '#19a979' : '#d64545')), size: 10 }, hovertext: rows.map(t => this.hoverText(t)), hoverinfo: 'text+y',
+        name: 'Geant4', line: { color: '#2a6fdb' } }, ...est],
+        this.layout({ xaxis: { title: p, type: dEst.log && !cat ? 'log' : 'linear' }, yaxis: { title: this.label(m) }, showlegend: est.length > 0 }), { responsive: true });
+      this.scanEstNote = !this.showEst ? '' : est.length ? 'Пунктир — аналитическая оценка для тех же конфигураций (NIST XCOM / простые законы), серая полоса — её диапазон.'
+        : 'Для этой метрики аналитической оценки нет.';
       const vals = rows.map(t => t[m]).filter(isFinite);
       this.scanSummary = vals.length ? `${this.label(m)}: от ${this.fmt(Math.min(...vals))} до ${this.fmt(Math.max(...vals))}; зелёные точки удовлетворяют ограничениям, красные — нет.` : '';
     },
