@@ -55,6 +55,9 @@ pre { background: var(--code); border: 1px solid var(--border); border-radius: 8
 .small { font-size: 12px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .right { margin-left: auto; }
+.jobrow { padding: 6px 0; border-bottom: 1px dashed var(--border); flex-wrap: nowrap; }
+.jobrow > a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobrow > .right { white-space: nowrap; }
 
 .btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit; display: inline-flex; gap: 6px; align-items: center; }
 .btn:hover { background: var(--panel-2); }
@@ -134,6 +137,8 @@ table.t td.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   .layout { grid-template-columns: 1fr; }
   .side { position: static; height: auto; }
+  .nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .nav a { margin: 0; padding: 6px 10px; background: var(--panel-2); }
   .split, .g2, .g3, .g4 { grid-template-columns: 1fr; }
   label.f { grid-template-columns: 1fr; }
   .main { padding: 16px; }

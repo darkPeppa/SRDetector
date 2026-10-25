@@ -1,25 +1,96 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Russo+One&family=Rubik+Spray+Paint&family=Rubik+Wet+Paint&family=Inter:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik+Mono+One&family=Rubik+Glitch&family=Rubik+Dirt&family=Russo+One&family=Inter:wght@400;600;800;900&display=swap');
 @import url('/static/themes/common.css');
-:root, :root[data-theme="dark"], :root[data-theme="light"] {
-  --bg: #0b0b0d; --panel: #141418; --panel-2: #1d1d23; --text: #f1f1f1; --muted: #9b9ba6; --border: #2c2c35;
-  --accent: #c6ff00; --accent-2: #ff2e4d; --ok: #c6ff00; --warn: #ffb000; --bad: #ff2e4d; --code: #101014;
-  --wall: #3a3a44; --core: #c6ff00; --coat: #ff2e4d; --rim: #1a1a20; --shadow: 0 0 0 1px #000;
+/* antihype: xerox black/white, blood red, hard edges, zine collage. No brand assets, own wording only. */
+/* :root[data-skin] (0,2,0) also beats style.css's dark-mode :root:not([data-theme="light"]) */
+:root[data-skin] {
+  --bg: #050505; --panel: #0d0d0d; --panel-2: #1a1a1a; --text: #f2f2f2; --muted: #9a9a9a; --border: #f2f2f2;
+  --accent: #ff1a1a; --accent-2: #ff1a1a; --ok: #f2f2f2; --warn: #ffd400; --bad: #ff1a1a; --code: #000;
+  --wall: #444; --core: #f2f2f2; --coat: #ff1a1a; --rim: #111; --shadow: 6px 6px 0 #ff1a1a;
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-body { background: repeating-linear-gradient(135deg, #0b0b0d 0 22px, #0e0e11 22px 44px); }
-.side { background: #08080a; border-right: 2px solid #c6ff00; }
-.skin-logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: .06em; color: #c6ff00; text-shadow: 3px 3px 0 #ff2e4d; }
-h1 { font-family: 'Russo One', sans-serif; font-size: 30px !important; letter-spacing: .04em; color: #fff; text-shadow: 3px 3px 0 #ff2e4d; }
-.card { border-radius: 4px; border: 1px solid #2c2c35; }
-.card h2 { font-family: 'Russo One', sans-serif; font-size: 17px; letter-spacing: .05em; color: #c6ff00; }
-.btn { border-radius: 2px; text-transform: uppercase; letter-spacing: .04em; font-weight: 800; }
-.btn.primary { background: #c6ff00; border-color: #c6ff00; color: #000; box-shadow: 4px 4px 0 #ff2e4d; }
-.nav a.active { background: #c6ff00; color: #000; }
-.skin-slogan { font-family: 'Rubik Wet Paint', cursive; font-weight: 400; color: #ff2e4d; font-size: 22px; transform: rotate(-1deg); }
-.tag { font-family: 'Rubik Spray Paint', cursive; font-size: 30px; padding: 6px 16px; color: hsl(var(--hue) 100% 62%);
-  text-shadow: 0 0 10px hsl(var(--hue) 100% 50% / .7), 2px 2px 0 #000; background: #ffffff10; border: 2px dashed hsl(var(--hue) 100% 60% / .6);
-  transform: rotate(-8deg); white-space: nowrap; }
-.tag-alt { color: #ff9ad5; background: #1a0a14; border: 2px solid #ff9ad5; font-family: 'Russo One', sans-serif; letter-spacing: .1em; }
-.corner-cap { font-family: 'Russo One', sans-serif; font-size: 20px; color: #000; background: #ff2e4d; padding: 2px 12px; letter-spacing: .1em; }
-.badge.ok { background: #c6ff0026; color: #c6ff00; }
+body { font-family: Inter, system-ui, sans-serif; background: var(--noise), repeating-linear-gradient(0deg, #ffffff05 0 1px, transparent 1px 3px), #050505; }
+::selection { background: #ff1a1a; color: #000; }
 
-.skin-item { opacity: .6; }
+/* sidebar: black slab with a red edge */
+.side { background: var(--noise), #000000e8; border-right: 6px solid #ff1a1a; }
+.skin-logo { font-family: 'Rubik Mono One', sans-serif; font-size: 19px; letter-spacing: -.02em; color: #f2f2f2;
+  text-shadow: 2px 0 0 #ff1a1a, -2px 0 0 #00e5ff55; }
+.skin-sub { font-family: 'Russo One', sans-serif; text-transform: uppercase; letter-spacing: .18em; color: #000; background: #ff1a1a;
+  padding: 1px 6px; margin-top: 4px; width: max-content; opacity: 1; transform: skew(-12deg); }
+.nav a { border-radius: 0; text-transform: uppercase; font-weight: 800; font-size: 12.5px; letter-spacing: .06em; border-left: 3px solid transparent; }
+.nav a:hover { background: #f2f2f2; color: #000; }
+.nav a.active { background: #ff1a1a; color: #000; font-weight: 900; transform: skew(-8deg); border-left-color: #f2f2f2; }
+.nav .count { background: #f2f2f2; color: #000; border-radius: 0; }
+.tour-start { border-radius: 0; border: 2px solid #f2f2f2; color: #f2f2f2; text-transform: uppercase; font-size: 12px; letter-spacing: .06em; }
+.tour-start:hover { background: #f2f2f2; color: #000; }
+
+/* headings: glitching, shouting */
+h1 { font-family: 'Rubik Mono One', sans-serif; font-size: 26px !important; text-transform: uppercase; color: #f2f2f2;
+  text-shadow: 3px 3px 0 #ff1a1a; animation: ah-glitch 4s infinite steps(1); }
+@keyframes ah-glitch {
+  0%, 92%, 100% { text-shadow: 3px 3px 0 #ff1a1a; transform: none; }
+  93% { text-shadow: -4px 0 0 #ff1a1a, 4px 0 0 #00e5ff; transform: translateX(2px) skew(-6deg); }
+  95% { text-shadow: 5px -2px 0 #ff1a1a, -3px 2px 0 #f2f2f2; transform: translateX(-3px); }
+  97% { text-shadow: -2px 2px 0 #00e5ff, 2px -2px 0 #ff1a1a; transform: skew(4deg); }
+}
+.card { border-radius: 0; border: 2px solid #f2f2f2; background: #0d0d0de6; box-shadow: 6px 6px 0 #ff1a1a; }
+.card h2 { font-family: 'Russo One', sans-serif; font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
+  background: #f2f2f2; color: #000; padding: 3px 10px; width: max-content; max-width: 100%; transform: skew(-8deg); }
+.card h3 { color: #ff1a1a; }
+.kpi .v { font-family: 'Rubik Mono One', sans-serif; font-size: 34px; color: #ff1a1a; text-shadow: 2px 2px 0 #f2f2f2; }
+.kpi .l { text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+details.sec { border-radius: 0; border: 2px solid #f2f2f2; background: #0d0d0de6; }
+details.sec[open] > summary { background: #f2f2f2; color: #000; }
+.tabs { border-bottom: 2px solid #f2f2f2; }
+.tabs a { text-transform: uppercase; font-weight: 800; letter-spacing: .06em; }
+.tabs a.active { color: #000; background: #ff1a1a; border-color: #ff1a1a; }
+
+/* controls: hard edges, inverted on hover, shake on press */
+.btn { border-radius: 0; border: 2px solid #f2f2f2; background: #000; color: #f2f2f2; text-transform: uppercase; letter-spacing: .06em; font-weight: 900; }
+.btn:hover { background: #f2f2f2; color: #000; }
+.btn:active { animation: ah-shake .18s linear 2; }
+.btn.primary { background: #ff1a1a; border-color: #ff1a1a; color: #000; box-shadow: 4px 4px 0 #f2f2f2; }
+.btn.primary:hover { background: #f2f2f2; border-color: #f2f2f2; box-shadow: 4px 4px 0 #ff1a1a; filter: none; }
+@keyframes ah-shake { 0%, 100% { transform: none; } 25% { transform: translate(-2px, 1px) rotate(-1deg); } 75% { transform: translate(2px, -1px) rotate(1deg); } }
+input, select, textarea { border-radius: 0; border: 1px solid #f2f2f2; background: #000; }
+input:focus, select:focus, textarea:focus { outline: 2px solid #ff1a1a; border-color: #ff1a1a; }
+.badge, .chip { border-radius: 0; text-transform: uppercase; font-weight: 800; letter-spacing: .04em; }
+.badge.ok { background: #f2f2f2; color: #000; }
+.badge.bad { background: #ff1a1a; color: #000; }
+.badge.run { background: #ffd400; color: #000; }
+table.t th { color: #ff1a1a; text-transform: uppercase; letter-spacing: .06em; border-bottom: 2px solid #f2f2f2; }
+table.t td { border-bottom-color: #333; }
+table.t tr:hover td { background: #ff1a1a22; }
+pre, .log { border-radius: 0; background: #000; border: 1px solid #f2f2f2; color: #f2f2f2; }
+.svgbox, .gallery figure, .jsroot { border-radius: 0; border: 2px solid #f2f2f2; }
+.md blockquote { border-left: 6px solid #ff1a1a; }
+
+/* slogan: caution-tape strip running across the top */
+.skin-slogan { position: relative; overflow: hidden; white-space: nowrap; margin: -22px -28px 18px; padding: 7px 0;
+  background: #ff1a1a; color: #000; font-family: 'Rubik Glitch', 'Russo One', sans-serif; font-weight: 400; font-size: 19px;
+  text-transform: uppercase; border-top: 6px solid; border-bottom: 6px solid;
+  border-image: repeating-linear-gradient(-45deg, #000 0 12px, #ffd400 12px 24px) 6; }
+.skin-slogan span { display: inline-block; padding-left: 100%; animation: ah-marquee 14s linear infinite; }
+.skin-slogan span::after { content: '  ✖  АНТИХАЙП  ✖  '; white-space: pre; }
+@keyframes ah-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@media (max-width: 760px) { .skin-slogan { margin: -16px -16px 14px; } .side { border-right: 0; border-bottom: 6px solid #ff1a1a; } }
+
+/* decor: spray tags, crossed-out hype, xeroxed photo stickers with tape */
+.tag { font-family: 'Rubik Dirt', 'Russo One', sans-serif; font-size: 34px; padding: 4px 14px; color: #f2f2f2; text-transform: uppercase;
+  text-shadow: 3px 3px 0 #ff1a1a; background: #000; border: 3px solid #f2f2f2; transform: rotate(-8deg); white-space: nowrap; }
+.tag-alt { color: #000; background: #ff1a1a; border-color: #000; }
+.tag-x { position: relative; }
+.tag-x::after { content: ''; position: absolute; left: -6%; right: -6%; top: 50%; height: 7px; background: #ff1a1a; transform: rotate(-6deg); }
+.sticker-img { position: relative; border: 6px solid #f2f2f2; box-shadow: 8px 8px 0 #ff1a1a; background: #ff1a1a; }
+.sticker-img img { filter: grayscale(1) contrast(1.9) brightness(1.05); mix-blend-mode: multiply; }
+.sticker-img::before { content: ''; position: absolute; z-index: 1; top: -14px; left: 50%; width: 70px; height: 22px; margin-left: -35px;
+  background: #f2f2f2cc; transform: rotate(4deg); }
+.sticker-cap { position: absolute; z-index: 1; left: -8px; bottom: -14px; background: #000; color: #f2f2f2; border: 2px solid #f2f2f2;
+  font: 11px 'Russo One', sans-serif; text-transform: uppercase; letter-spacing: .1em; padding: 1px 6px; transform: rotate(-4deg); }
+.skin-corner .sticker-img { margin-top: 14px; }
+.corner-cap { display: inline-block; margin-top: 16px; font-family: 'Russo One', sans-serif; font-size: 16px; color: #000; background: #ff1a1a;
+  padding: 2px 12px; letter-spacing: .14em; animation: ah-blink 1.2s infinite steps(1); }
+@keyframes ah-blink { 50% { background: #f2f2f2; } }
+.sparkle { filter: grayscale(1) contrast(2); }
+.skin-item { opacity: .85; }
+@media (prefers-reduced-motion: reduce) { h1, .corner-cap, .skin-slogan span { animation: none; } .skin-slogan span { padding-left: 14px; } }

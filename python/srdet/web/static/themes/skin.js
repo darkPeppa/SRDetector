@@ -30,7 +30,7 @@
   // ---------------- Alpine hooks: nav titles, brand, slogans, toasts
   document.addEventListener('alpine:init', () => {
     Alpine.data('skinBar', () => ({ i: 0, get slogan() { return S.slogans[this.i % S.slogans.length]; },
-      init() { setInterval(() => this.i++, 6000); } }));
+      init() { setInterval(() => this.i++, S.sloganEvery || 6000); } }));
   });
   window.addEventListener('load', () => {
     const app = window.Alpine && Alpine.$data(document.querySelector('.layout'));
@@ -59,7 +59,13 @@
     const layer = document.createElement('div');
     layer.className = 'skin-decor';
     document.body.appendChild(layer);
-    const items = [...S.decor.names.map(n => ({ text: n })), ...pics.map(p => ({ img: p }))];
+    // pictures interleaved with the names, so they show up from the very start
+    const items = [];
+    const names = S.decor.names.map(n => ({ text: n }));
+    for (let i = 0; i < Math.max(names.length, pics.length); i++) {
+      if (pics.length) items.push({ img: pics[i % pics.length] });
+      if (i < names.length) items.push(names[i]);
+    }
     let k = 0;
     const spawn = () => {
       if (document.hidden) return;
@@ -75,10 +81,19 @@
     };
     for (let i = 0; i < 4; i++) setTimeout(spawn, i * 900);
     setInterval(spawn, S.decor.every || 3200);
-    // a fixed corner mascot frame (user picture if there is one)
+    // a mascot frame at the bottom of the sidebar, cycling through the user's pictures
     const corner = document.createElement('div');
     corner.className = 'skin-corner';
     corner.innerHTML = S.decor.corner(pics[0]);
-    document.body.appendChild(corner);
+    (document.querySelector('.side') || document.body).appendChild(corner);
+    const frame = corner.querySelector('img');
+    if (frame && pics.length > 1) {
+      let j = 0;
+      setInterval(() => {
+        if (document.hidden) return;
+        frame.parentElement.style.opacity = 0;
+        setTimeout(() => { frame.src = pics[++j % pics.length]; frame.parentElement.style.opacity = 1; }, 400);
+      }, 5000);
+    }
   }
 })();

@@ -16,7 +16,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
 <body>
-<div class="layout" x-data="app()" x-init="init()">
+<div class="layout" x-data="app()">
 
 <!-- ======================== sidebar ======================== -->
 <aside class="side">
@@ -72,9 +72,9 @@
     <div class="card">
       <h2>Задачи</h2>
       <template x-for="j in jobs.slice(0, 7)" :key="j.id">
-        <div class="row" style="padding:6px 0;border-bottom:1px dashed var(--border)">
+        <div class="row jobrow">
           <span :class="'badge ' + jobBadge(j.status)" x-text="j.status"></span>
-          <a :href="'#/job?id=' + j.id" x-text="j.title"></a>
+          <a :href="'#/job?id=' + j.id" x-text="j.title" :title="j.title"></a>
           <span class="right small muted" x-text="j.created.replace('T',' ')"></span>
         </div>
       </template>

@@ -1,37 +1,39 @@
-// Rap skin: dark stage, neon, graffiti tags and stickers with names; battle vocabulary.
+// Rap skin, antihype cut: xerox black/white/red, caution tape, crossed-out hype; battle vocabulary.
 window.SKIN = {
   name: 'rap',
-  brand: '<span class="skin-logo">SRDETECTOR</span><span class="skin-sub">// battle edition</span>',
+  brand: '<span class="skin-logo">SRDETECTOR</span><span class="skin-sub">антихайп edition</span>',
   nav: { dashboard: 'Сцена', new: 'Новый раунд', runs: 'Раунды', studies: 'Разборы', optimize: 'Флекс-оптимизация',
          compare: 'Батл прогонов', jobs: 'Очередь на сцену', docs: 'Райдер' },
-  icons: { dashboard: '🎤', new: '🔥', runs: '💿', studies: '📼', optimize: '💸', compare: '🥊', jobs: '⏱', docs: '📜' },
+  icons: { dashboard: '⚡', new: '💥', runs: '📼', studies: '🗞', optimize: '⛓', compare: '🥊', jobs: '⏱', docs: '📜' },
   text: {
-    'Дашборд': 'Сцена 🎤', '＋ Новое моделирование': '🔥 Новый раунд', 'Новое моделирование': 'Новый раунд 🔥',
-    '▶ Запустить': '🎤 На бит', '▶ + 3D-картинки': '🎤 На бит + 3D', 'Сбросить': 'Сбросить бит',
-    'Показать макрос Geant4': 'Показать текст макроса 📜', 'Прогоны': 'Раунды 💿', 'Задачи': 'Очередь на сцену ⏱',
-    'Лучшие найденные конфигурации': 'Лучшие панчи 💸', 'Последние прогоны': 'Последние раунды 💿',
-    'Оптимизация параметров': 'Флекс-оптимизация 💸', 'Сравнение прогонов': 'Батл прогонов 🥊',
-    'Предпросмотр геометрии': 'Превью сцены', '▶ Прогнать лучшую': '🎤 Выпустить лучший конфиг',
-    'Проверка физики (quick)': 'Фактчек физики ✅',
+    'Дашборд': 'Сцена', '＋ Новое моделирование': '💥 Новый раунд', 'Новое моделирование': 'Новый раунд',
+    '▶ Запустить': '💥 На бит', '▶ + 3D-картинки': '💥 На бит + 3D', 'Сбросить': 'Снести бит',
+    'Показать макрос Geant4': 'Текст макроса без цензуры', 'Прогоны': 'Раунды', 'Задачи': 'Очередь на сцену',
+    'Лучшие найденные конфигурации': 'Лучшие панчи', 'Последние прогоны': 'Последние раунды',
+    'Оптимизация параметров': 'Флекс-оптимизация', 'Сравнение прогонов': 'Батл прогонов',
+    'Предпросмотр геометрии': 'Превью сцены', '▶ Прогнать лучшую': '💥 Выпустить лучший конфиг',
+    'Проверка физики (quick)': 'Фактчек физики',
   },
   slogans: [
-    'панч по шуму: SNR растёт', 'биф с кросс-током закрыт', 'флексим светосбором', 'альтушечно, но строго по физике',
-    'раунд за раундом — до оптимума', 'Geant4 на бите, фотоны на сцене', 'без фейков: всё сверено с XCOM',
-    'микрофон — сенсору, слово — данным', 'серебро в покрытии, а не на шее',
+    'хайп — это шум, сигнал — это данные', 'никакого фейкового светосбора', 'XCOM не врёт, а ты?',
+    'SNR или уходи со сцены', 'кросс-ток — в бан навсегда', 'сначала валидация, потом панчи',
+    'мейнстрим считает на глаз, мы — на Geant4', 'без автотюна: сырые фотоэлектроны', 'серебро в покрытии, а не на шее',
+    'альтушечно, но строго по физике',
   ],
-  toastPrefix: '🎤 ',
+  sloganEvery: 14000,  // one slogan per pass of the marquee (see .skin-slogan in rap.css)
+  toastPrefix: '✖ ',
   decor: {
-    names: ['Замай', 'Слава КПСС', 'Oxxxymiron', 'Ежемесячные', 'альтушечно', '🔥', '💿'],
-    every: 3000,
+    names: ['АНТИХАЙП', 'Замай', 'ХАЙП', 'Слава КПСС', 'Oxxxymiron', 'Ежемесячные', 'альтушечно', '💥', '📼'],
+    every: 2600,
     render(it, r) {
-      if (it.img) return `<div class="sticker-img" style="--s:${90 + r * 50}px"><img src="${it.img}"></div>`;
+      if (it.img) return `<div class="sticker-img" style="--s:${100 + r * 60}px;transform:rotate(${(r * 16 - 8).toFixed(1)}deg)"><img src="${it.img}"><span class="sticker-cap">${r > .5 ? 'no hype' : 'антихайп'}</span></div>`;
       if (it.text.length <= 2) return `<span class="sparkle" style="font-size:${24 + r * 18}px">${it.text}</span>`;
-      const alt = it.text === 'альтушечно';
-      return `<div class="tag ${alt ? 'tag-alt' : ''}" style="--hue:${Math.round(r * 360)}">${it.text}</div>`;
+      const cls = it.text === 'альтушечно' || it.text === 'АНТИХАЙП' ? 'tag-alt' : it.text === 'ХАЙП' ? 'tag-x' : '';
+      return `<div class="tag ${cls}">${it.text}</div>`;
     },
     corner(pic) {
-      return pic ? `<div class="sticker-img" style="--s:120px"><img src="${pic}"></div><div class="corner-cap">LIVE 🎤</div>`
-                 : `<div class="corner-cap">● LIVE 🎤</div>`;
+      return pic ? `<div class="sticker-img" style="--s:150px"><img src="${pic}"></div><div class="corner-cap">● LIVE</div>`
+                 : `<div class="corner-cap">● LIVE</div>`;
     },
   },
 };
